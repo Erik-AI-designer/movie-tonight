@@ -1,0 +1,23 @@
+{
+  // Cloudflare Worker config. Cloudflare reads this when it builds from GitHub.
+  "name": "movie-tonight",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+
+  // Everything in public/ is served as static files (HTML, CSS, JS).
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+
+  // User accounts and sessions live in a D1 (SQLite) database.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "movie-tonight",
+      "database_id": "PASTE_DATABASE_ID_HERE"
+    }
+  ],
+
+  // Affiliate tags. Leave empty and links still work, just without the tag.
+  "vars": {
+    "AMAZON_TAG": ""
+  }
+}
