@@ -6,23 +6,31 @@ disliked genres, and which services you have. Money comes from affiliate links o
 
 Runs on **Cloudflare Workers** (free plan) with a **D1** database for accounts.
 
+**Features:** one pick by mood/time/services · movie, series or either · "seen it" / "not for me" /
+⭐ "my list" (never suggests seen or hidden titles again) · trailer button · posters, descriptions,
+ratings and "where to watch in Estonia" from TMDB · movie night with friends (shared room link) ·
+installable on phones (PWA) · login rate limiting · password reset with a recovery code.
+
 ## Files
 
 ```
 movie-tonight/
 ├── wrangler.jsonc      Cloudflare config: worker name, database, affiliate tags
-├── package.json        scripts + the `wrangler` tool
-├── schema.sql          database tables (users, sessions), run once
+├── schema.sql          database tables — paste into the D1 console after every update (safe to re-run)
 ├── src/                backend: runs on Cloudflare, never sent to the browser
-│   ├── index.js        routes: /api/register, /api/login, /api/logout, /api/me, /api/profile, /api/recommend
-│   ├── auth.js         passwords (PBKDF2 hashing), sessions, cookies
-│   ├── profile.js      the onboarding questions and how answers are checked
-│   ├── recommend.js    picks one movie and explains why
-│   └── movies.js       THE CATALOGUE: movies, moods, genres, services, link templates
+│   ├── index.js        all /api/... routes
+│   ├── auth.js         passwords, sessions, rate limiting, recovery codes
+│   ├── profile.js      the onboarding questions
+│   ├── recommend.js    picks one title (for one person or a group) and explains why
+│   ├── lists.js        seen / not for me / my list
+│   ├── tmdb.js         posters, descriptions, trailers, Estonian availability (cached a week)
+│   ├── rooms.js        movie night with friends
+│   └── movies.js       THE CATALOGUE: movies, series, moods, genres, services
 └── public/             frontend: what the browser loads
-    ├── index.html      the page with 3 screens: login → questions → picker
+    ├── index.html      all screens
     ├── app.js          page logic
-    └── style.css       look
+    ├── style.css       look (incl. the card flip animation)
+    ├── manifest.webmanifest, sw.js, icon*.png, icon.svg   phone app (PWA)
 ```
 
 ## Deploy (one time)
@@ -34,6 +42,9 @@ movie-tonight/
 4. **Connect GitHub.** *Workers & Pages → Create → Import a repository* → pick the repo.
    Build command: leave empty. Deploy command: `npx wrangler deploy`. Save and deploy.
 5. Open the `https://movie-tonight.<your-subdomain>.workers.dev` link it gives you.
+6. **TMDB (posters etc.):** get an "API Read Access Token" at themoviedb.org → Settings → API.
+   In Cloudflare: Workers → movie-tonight → Settings → Variables and Secrets → Add →
+   type **Secret**, name `TMDB_TOKEN`, paste the token. Without it the site still works, just without posters.
 
 After that, every `git push` to `main` redeploys automatically.
 
@@ -45,7 +56,7 @@ After that, every `git push` to `main` redeploys automatically.
 
 ## Changing movies
 
-Edit `MOVIES` in `src/movies.js`. Which services carry which movie changes often and depends on the
+Edit `MOVIES` in `src/movies.js` (add `type: "series"` for series; `runtime` is then one episode). Which services carry which movie changes often and depends on the
 country, so the `services` lists there are examples. Check them before going public.
 
 ## Run locally (needs Node.js)

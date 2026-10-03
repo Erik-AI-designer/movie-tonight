@@ -22,6 +22,13 @@ export const DURATIONS = {
   long: { label: "сколько угодно", max: Infinity },
 };
 
+// "Movie / Series / Either" choice in the picker.
+export const KINDS = {
+  movie: "фильм",
+  series: "сериал",
+  any: "всё равно",
+};
+
 export const GENRES = {
   comedy: "комедия",
   drama: "драма",
@@ -78,7 +85,8 @@ export const SERVICES = {
   google: { name: "Google TV / YouTube", group: "rent", rental: true, url: "https://www.youtube.com/results?search_query={q}+movie" },
 };
 
-// minAge: 0 = for everyone, 12, 16, 18. Runtime in minutes.
+// minAge: 0 = for everyone, 6, 12, 16, 18. Runtime in minutes (for series: one episode).
+// type: "series" for TV series; everything else is a movie.
 // `services` are examples — availability changes often and differs by country.
 export const MOVIES = [
   { id: "grand-budapest", title: "Отель «Гранд Будапешт»", original: "The Grand Budapest Hotel", year: 2014, runtime: 99, minAge: 12, genres: ["comedy", "adventure"], moods: ["funny", "cozy"], services: ["disney", "kinopoisk", "okko"] },
@@ -125,4 +133,18 @@ export const MOVIES = [
   // Estonian films.
   { id: "seltsimees-laps", title: "Товарищ ребёнок", original: "Seltsimees laps", year: 2018, runtime: 99, minAge: 12, genres: ["drama", "family"], moods: ["thoughtful"], services: ["jupiter", "go3", "elisa"] },
   { id: "kevade", title: "Весна", original: "Kevade", year: 1969, runtime: 84, minAge: 0, genres: ["comedy", "drama"], moods: ["cozy", "thoughtful"], services: ["jupiter"], noRental: true },
+
+  // TV series. `runtime` is one episode, so they fit even a short evening.
+  { id: "stranger-things", type: "series", title: "Очень странные дела", original: "Stranger Things", year: 2016, runtime: 50, minAge: 16, genres: ["scifi", "horror", "adventure"], moods: ["thrilling", "epic"], services: ["netflix"] },
+  { id: "wednesday", type: "series", title: "Уэнсдэй", original: "Wednesday", year: 2022, runtime: 50, minAge: 12, genres: ["mystery", "comedy"], moods: ["funny", "thrilling"], services: ["netflix"] },
+  { id: "arcane", type: "series", title: "Аркейн", original: "Arcane", year: 2021, runtime: 40, minAge: 16, genres: ["animation", "action"], moods: ["epic", "thrilling"], services: ["netflix"] },
+  { id: "avatar-aang", type: "series", title: "Аватар: Легенда об Аанге", original: "Avatar: The Last Airbender", year: 2005, runtime: 23, minAge: 0, genres: ["animation", "adventure", "family"], moods: ["epic", "cozy"], services: ["netflix", "paramount"] },
+  { id: "sherlock", type: "series", title: "Шерлок", original: "Sherlock", year: 2010, runtime: 88, minAge: 12, genres: ["mystery", "thriller"], moods: ["thrilling", "thoughtful"], services: ["prime", "kinopoisk"] },
+  { id: "friends", type: "series", title: "Друзья", original: "Friends", year: 1994, runtime: 22, minAge: 12, genres: ["comedy", "romance"], moods: ["funny", "cozy", "romantic"], services: ["hbo", "amediateka"] },
+  { id: "the-office", type: "series", title: "Офис", original: "The Office", year: 2005, runtime: 22, minAge: 12, genres: ["comedy"], moods: ["funny", "cozy"], services: ["prime", "skyshowtime"] },
+  { id: "ted-lasso", type: "series", title: "Тед Лассо", original: "Ted Lasso", year: 2020, runtime: 35, minAge: 12, genres: ["comedy", "drama"], moods: ["cozy", "funny"], services: ["apple"] },
+  { id: "severance", type: "series", title: "Разделение", original: "Severance", year: 2022, runtime: 50, minAge: 16, genres: ["scifi", "thriller", "mystery"], moods: ["thoughtful", "thrilling"], services: ["apple"] },
+  { id: "mandalorian", type: "series", title: "Мандалорец", original: "The Mandalorian", year: 2019, runtime: 37, minAge: 12, genres: ["scifi", "adventure", "action"], moods: ["epic"], services: ["disney"] },
+  { id: "last-of-us", type: "series", title: "Одни из нас", original: "The Last of Us", year: 2023, runtime: 55, minAge: 18, genres: ["drama", "horror", "adventure"], moods: ["thrilling", "epic"], services: ["hbo", "amediateka"] },
+  { id: "kukhnya", type: "series", title: "Кухня", original: "Кухня", year: 2012, runtime: 25, minAge: 16, genres: ["comedy"], moods: ["funny", "cozy"], services: ["start", "kinopoisk", "ivi"] },
 ];

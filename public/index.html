@@ -2,15 +2,24 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Что посмотреть сегодня</title>
   <meta name="description" content="Выбери настроение, время и свои стриминги — получи один фильм на вечер.">
+  <meta name="theme-color" content="#12111a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Что посмотреть">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="top">
-    <span class="logo">🍿 Что посмотреть сегодня</span>
+    <button class="logo link" id="home">🍿 Что посмотреть</button>
     <nav id="nav" hidden>
+      <button class="link" data-go="list">⭐ Мой список</button>
+      <button class="link" data-go="room">👥 С друзьями</button>
       <button class="link" id="edit-profile">Мои ответы</button>
       <button class="link" id="logout">Выйти</button>
     </nav>
@@ -19,23 +28,41 @@
   <main>
     <p id="loading" class="muted">Загрузка…</p>
 
-    <!-- 1. Login / register -->
+    <!-- Login / register / reset password -->
     <section id="screen-auth" hidden>
       <h1>Один фильм на вечер.<br>Без часа листания.</h1>
       <p class="muted">Войди, чтобы получить подборку — мы зададим пару вопросов о твоих вкусах.</p>
       <div class="tabs">
         <button class="tab active" data-mode="login">Вход</button>
         <button class="tab" data-mode="register">Регистрация</button>
+        <button class="tab" data-mode="reset">Забыл пароль</button>
       </div>
       <form id="auth-form" class="card">
         <label>Email <input type="email" name="email" autocomplete="email" required></label>
-        <label>Пароль <input type="password" name="password" minlength="8" autocomplete="current-password" required></label>
+        <label id="code-field" hidden>Код восстановления
+          <input type="text" name="code" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX">
+        </label>
+        <label><span id="password-label">Пароль</span>
+          <input type="password" name="password" minlength="8" autocomplete="current-password" required>
+        </label>
         <button type="submit" class="primary" id="auth-submit">Войти</button>
         <p class="error" id="auth-error"></p>
       </form>
     </section>
 
-    <!-- 2. Onboarding questions -->
+    <!-- Recovery code, shown once after registering or resetting -->
+    <section id="screen-code" hidden>
+      <h1>Сохрани код восстановления</h1>
+      <p class="muted">Если забудешь пароль, этим кодом можно задать новый. Мы показываем его только один раз — сфотографируй, запиши или сохрани в заметках.</p>
+      <div class="card">
+        <p class="recovery-code" id="recovery-code"></p>
+        <button class="secondary" id="copy-code">Скопировать</button>
+        <label class="check"><input type="checkbox" id="code-saved"> Я сохранил код</label>
+        <button class="primary" id="code-continue" disabled>Дальше</button>
+      </div>
+    </section>
+
+    <!-- Onboarding questions -->
     <section id="screen-onboarding" hidden>
       <h1>Пара вопросов о тебе</h1>
       <form id="profile-form" class="card">
@@ -56,7 +83,7 @@
           <div class="chips" data-name="vibe" data-type="radio"></div>
         </fieldset>
         <fieldset>
-          <legend>Какие сервисы у тебя есть?</legend>
+          <legend>Какие сервисы у тебя есть? <span class="muted">Отметь только свои.</span></legend>
           <div class="chips" data-name="services" data-type="checkbox"></div>
         </fieldset>
         <button type="submit" class="primary">Готово</button>
@@ -64,10 +91,10 @@
       </form>
     </section>
 
-    <!-- 3. Picker + result -->
+    <!-- Picker + result -->
     <section id="screen-picker" hidden>
       <h1>Что сегодня вечером?</h1>
-      <form id="pick-form" class="card">
+      <form id="pick-form" class="card answers">
         <fieldset>
           <legend>Настроение</legend>
           <div class="chips" data-name="mood" data-type="radio"></div>
@@ -77,24 +104,97 @@
           <div class="chips" data-name="duration" data-type="radio"></div>
         </fieldset>
         <fieldset>
+          <legend>Фильм или сериал</legend>
+          <div class="chips" data-name="kind" data-type="radio"></div>
+        </fieldset>
+        <fieldset>
           <legend>Мои сервисы</legend>
           <div class="chips" data-name="services" data-type="checkbox"></div>
         </fieldset>
-        <button type="submit" class="primary">Подобрать фильм</button>
+        <button type="submit" class="primary">Подобрать</button>
         <p class="error" id="pick-error"></p>
       </form>
+      <div id="result"></div>
+    </section>
 
-      <article id="result" class="card result" hidden>
-        <p class="eyebrow">Сегодня смотрим</p>
-        <h2 id="r-title"></h2>
-        <p class="muted" id="r-meta"></p>
-        <p id="r-reason"></p>
-        <div id="r-links" class="links"></div>
-        <button class="secondary" id="another">Другой вариант</button>
-        <p class="disclosure">Некоторые ссылки — партнёрские: если ты оформишь подписку или купишь фильм, мы можем получить небольшую комиссию. Для тебя цена не меняется.</p>
-      </article>
+    <!-- My list -->
+    <section id="screen-list" hidden>
+      <h1>Мой список</h1>
+      <div class="tabs" id="list-tabs">
+        <button class="tab active" data-status="saved">⭐ Сохранённые</button>
+        <button class="tab" data-status="seen">👁 Просмотренные</button>
+        <button class="tab" data-status="skip">🙅 Скрытые</button>
+      </div>
+      <div id="list-items" class="card list"></div>
+
+      <h2 class="small-heading">Аккаунт</h2>
+      <div class="card">
+        <p class="muted">Код восстановления нужен, если забудешь пароль. Создай новый, если старый потерялся — старый перестанет работать.</p>
+        <button class="secondary" id="new-code">Создать новый код</button>
+      </div>
+    </section>
+
+    <!-- Movie night with friends -->
+    <section id="screen-room" hidden>
+      <div id="room-start">
+        <h1>Вечер с друзьями</h1>
+        <p class="muted">Создай комнату и отправь ссылку друзьям. Каждый отметит настроение и свои сервисы — и вы получите один фильм на всех.</p>
+        <div class="card">
+          <button class="primary" id="room-create">Создать комнату</button>
+          <p class="muted or">или войди по коду</p>
+          <form id="room-join-form" class="inline-form">
+            <input type="text" name="code" maxlength="6" placeholder="Код комнаты" autocomplete="off" required>
+            <button type="submit" class="secondary">Войти</button>
+          </form>
+          <p class="error" id="room-start-error"></p>
+        </div>
+      </div>
+
+      <div id="room-view" hidden>
+        <h1>Комната <span id="room-code" class="code-badge"></span></h1>
+        <div class="card">
+          <p class="muted">Отправь эту ссылку друзьям:</p>
+          <div class="inline-form">
+            <input type="text" id="room-link" readonly>
+            <button class="secondary" id="room-share">Поделиться</button>
+          </div>
+          <ul id="room-members" class="members"></ul>
+        </div>
+
+        <form id="room-form" class="card answers">
+          <fieldset>
+            <legend>Твоё настроение</legend>
+            <div class="chips" data-name="mood" data-type="radio"></div>
+          </fieldset>
+          <fieldset>
+            <legend>Сколько есть времени</legend>
+            <div class="chips" data-name="duration" data-type="radio"></div>
+          </fieldset>
+          <fieldset>
+            <legend>Фильм или сериал</legend>
+            <div class="chips" data-name="kind" data-type="radio"></div>
+          </fieldset>
+          <fieldset>
+            <legend>Твои сервисы</legend>
+            <div class="chips" data-name="services" data-type="checkbox"></div>
+          </fieldset>
+          <button type="submit" class="primary" id="room-ready">Я готов</button>
+          <p class="error" id="room-error"></p>
+        </form>
+
+        <div id="room-owner" class="card" hidden>
+          <p class="muted" id="room-owner-hint"></p>
+          <button class="primary" id="room-pick">🎬 Подобрать для всех</button>
+        </div>
+        <p class="muted" id="room-wait" hidden>Ждём, пока организатор нажмёт «Подобрать для всех»…</p>
+        <div id="room-result"></div>
+      </div>
     </section>
   </main>
+
+  <footer class="footer">
+    <p>Данные о фильмах — <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>, где посмотреть — <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a>. Этот сайт использует TMDB API, но не одобрен и не сертифицирован TMDB.</p>
+  </footer>
 
   <script src="/app.js"></script>
 </body>
