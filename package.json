@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute movie-tonight --remote --file=schema.sql",
+    "db:init:local": "wrangler d1 execute movie-tonight --local --file=schema.sql"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
