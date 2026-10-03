@@ -1,59 +1,115 @@
-// Options shown on the page. Ids must match src/movies.js and src/profile.js.
-const OPTIONS = {
-  ageGroup: { u13: "до 13", "13-15": "13–15", "16-17": "16–17", "18+": "18+" },
-  genres: {
-    comedy: "комедия", drama: "драма", scifi: "фантастика", thriller: "триллер", horror: "ужасы",
-    romance: "мелодрама", animation: "мультфильм", adventure: "приключения", action: "боевик",
-    mystery: "детектив", family: "семейное",
-  },
-  vibe: { light: "лёгкого", deep: "серьёзного", both: "по-разному" },
-  mood: {
-    cozy: "🛋 уютное", funny: "😂 посмеяться", thrilling: "😱 пощекотать нервы",
-    thoughtful: "🤔 подумать", romantic: "💞 романтика", epic: "🚀 приключение",
-  },
-  duration: { short: "до 1 ч 45 мин", normal: "до 2 ч 15 мин", long: "сколько угодно" },
-  kind: { movie: "🎬 фильм", series: "📺 сериал", any: "всё равно" },
+// Page logic. Texts come from i18n.js (I18N); ids must match src/movies.js and src/profile.js.
+const IDS = {
+  ageGroup: ["u13", "13-15", "16-17", "18+"],
+  genres: ["comedy", "drama", "scifi", "thriller", "horror", "romance", "animation", "adventure", "action", "mystery", "family"],
+  vibe: ["light", "deep", "both"],
+  mood: ["cozy", "funny", "thrilling", "thoughtful", "romantic", "epic"],
+  duration: ["short", "normal", "long"],
+  kind: ["movie", "series", "any"],
 };
 
 // Streaming services, grouped. Ids must match SERVICES in src/movies.js.
 const SERVICE_GROUPS = [
-  [
-    "Подписки",
-    {
-      netflix: "Netflix", prime: "Prime Video", disney: "Disney+", apple: "Apple TV+", hbo: "HBO Max",
-      skyshowtime: "SkyShowtime", viaplay: "Viaplay", paramount: "Paramount+", mubi: "MUBI", crunchyroll: "Crunchyroll",
-    },
-  ],
-  ["Эстония", { go3: "Go3", elisa: "Elisa Elamus", telia: "Telia TV", jupiter: "ERR Jupiter" }],
-  [
-    "Русскоязычные",
-    {
-      kinopoisk: "Кинопоиск", okko: "Okko", ivi: "Иви", start: "Start", premier: "Premier",
-      wink: "Wink", kion: "KION", amediateka: "Амедиатека",
-    },
-  ],
-  ["Аренда и покупка фильмов", { apple_rent: "Apple TV (аренда)", google: "Google TV / YouTube" }],
+  ["sg.subs", {
+    netflix: "Netflix", prime: "Prime Video", disney: "Disney+", apple: "Apple TV+", hbo: "HBO Max",
+    skyshowtime: "SkyShowtime", viaplay: "Viaplay", paramount: "Paramount+", mubi: "MUBI", crunchyroll: "Crunchyroll",
+  }],
+  ["sg.ee", { go3: "Go3", elisa: "Elisa Elamus", telia: "Telia TV", jupiter: "ERR Jupiter" }],
+  ["sg.ru", {
+    kinopoisk: "Кинопоиск", okko: "Okko", ivi: "Иви", start: "Start", premier: "Premier",
+    wink: "Wink", kion: "KION", amediateka: "Амедиатека",
+  }],
+  ["sg.rent", { apple_rent: null, google: "Google TV / YouTube" }], // null = translated name (svc.<id>)
 ];
-const ALL_SERVICES = Object.assign({}, ...SERVICE_GROUPS.map(([, services]) => services));
+const serviceName = (id) => {
+  for (const [, services] of SERVICE_GROUPS) if (id in services) return services[id] ?? t(`svc.${id}`);
+  return id;
+};
+const ALL_SERVICE_IDS = SERVICE_GROUPS.flatMap(([, s]) => Object.keys(s));
 
 const $ = (sel) => document.querySelector(sel);
 const ROOM_POLL_MS = 4000;
+
+// ---------- Settings: language + theme (remembered in this browser only) ----------
+function stored(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function store(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Private mode etc. — the setting just won't be remembered.
+  }
+}
+
+let lang = stored("lang") || ({ et: "et", en: "en" }[(navigator.language || "ru").slice(0, 2)] ?? "ru");
+if (!I18N[lang]) lang = "ru";
+
+function t(key, vars = {}) {
+  let s = I18N[lang][key] ?? I18N.ru[key] ?? key;
+  for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, v);
+  return s;
+}
+
+function applyI18n() {
+  document.documentElement.lang = lang;
+  document.title = t("app.name");
+  document.querySelectorAll("[data-i18n]").forEach((e) => { e.textContent = t(e.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-html]").forEach((e) => { e.innerHTML = t(e.dataset.i18nHtml); }); // our own texts only
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((e) => { e.placeholder = t(e.dataset.i18nPlaceholder); });
+  document.querySelectorAll("[data-i18n-title]").forEach((e) => { e.title = t(e.dataset.i18nTitle); });
+  $("#lang-select").value = lang;
+  updateAuthLabels();
+}
+
+function applyTheme(theme) {
+  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
+  const bg = getComputedStyle(document.body).backgroundColor;
+  document.querySelector('meta[name="theme-color"]').content = bg;
+}
+
+$("#lang-select").addEventListener("change", (e) => {
+  lang = e.target.value;
+  store("lang", lang);
+  applyI18n();
+  rerender();
+});
+$("#theme-select").value = stored("theme") || "auto";
+$("#theme-select").addEventListener("change", (e) => {
+  store("theme", e.target.value);
+  applyTheme(e.target.value);
+});
+
+// Close the ⚙️ menu when clicking elsewhere or choosing an action.
+document.addEventListener("click", (e) => {
+  const menu = $("#settings");
+  if (menu.open && !menu.contains(e.target)) menu.open = false;
+});
+
+// ---------- State ----------
 let me = null;
+let screen = null;
 let shown = []; // ids already suggested in this picker session
+let lastResult = null;
 let pendingRoom = null; // room code from a shared link, opened after login
-let room = { code: null, timer: null, resultId: null, shown: [] };
+let room = { code: null, timer: null, renderKey: null, shown: [], state: null };
 
 // ---------- Helpers ----------
 async function api(path, body) {
   const res = await fetch(path, {
     method: body ? "POST" : "GET",
-    headers: body ? { "content-type": "application/json" } : {},
+    headers: { "x-lang": lang, ...(body ? { "content-type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     credentials: "same-origin",
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new Error(data.error || "Ошибка сети");
+    const err = new Error(data.error || t("err.network"));
     err.status = res.status;
     throw err;
   }
@@ -67,20 +123,25 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
-function show(screen) {
+function show(name) {
+  screen = name;
   $("#loading").hidden = true;
-  for (const id of ["auth", "code", "onboarding", "picker", "list", "room"]) {
-    $(`#screen-${id}`).hidden = id !== screen;
+  for (const id of ["auth", "code", "onboarding", "picker", "list", "room", "stats"]) {
+    $(`#screen-${id}`).hidden = id !== name;
   }
-  $("#nav").hidden = ["auth", "code"].includes(screen) || !me?.profile;
-  if (screen !== "room") stopRoomPolling();
+  const loggedIn = Boolean(me?.profile) && !["auth", "code"].includes(name);
+  $("#nav").hidden = !loggedIn;
+  $("#nav-stats").hidden = !me?.isAdmin;
+  $("#account-actions").hidden = !me;
+  $("#settings").open = false;
+  if (name !== "room") stopRoomPolling();
   window.scrollTo({ top: 0 });
 }
 
-// Add radio/checkbox chips to a .chips container.
+// Add radio/checkbox chips to a .chips container. `options` = [[value, label], ...]
 function addChips(container, options, selected) {
   const { name, type } = container.dataset;
-  for (const [value, label] of Object.entries(options)) {
+  for (const [value, label] of options) {
     const input = el("input", { type, name, value, checked: selected.includes(value) });
     container.append(el("label", { className: "chip" }, input, el("span", { textContent: label })));
   }
@@ -91,25 +152,27 @@ function renderChips(container, options, selected = []) {
   addChips(container, options, selected);
 }
 
+const opts = (group, prefix) => IDS[group].map((id) => [id, t(`${prefix}.${id}`)]);
+
 // All services, with a small heading above each group.
 function renderServiceGroups(container, selected = []) {
   container.replaceChildren();
   for (const [heading, services] of SERVICE_GROUPS) {
-    container.append(el("p", { className: "chip-group", textContent: heading }));
-    addChips(container, services, selected);
+    container.append(el("p", { className: "chip-group", textContent: t(heading) }));
+    addChips(container, Object.keys(services).map((id) => [id, serviceName(id)]), selected);
   }
 }
 
 // Mood / time / kind / services form, used by the picker and in rooms.
 function renderAnswers(form, answers = {}) {
-  renderChips(form.querySelector('[data-name="mood"]'), OPTIONS.mood, answers.mood ? [answers.mood] : []);
-  renderChips(form.querySelector('[data-name="duration"]'), OPTIONS.duration, [answers.duration || "normal"]);
-  renderChips(form.querySelector('[data-name="kind"]'), OPTIONS.kind, [answers.kind || "any"]);
+  renderChips(form.querySelector('[data-name="mood"]'), opts("mood", "mood"), answers.mood ? [answers.mood] : []);
+  renderChips(form.querySelector('[data-name="duration"]'), opts("duration", "duration"), [answers.duration || "normal"]);
+  renderChips(form.querySelector('[data-name="kind"]'), opts("kind", "kind"), [answers.kind || "any"]);
   // Only show the services the user said they have (all of them if they picked none).
-  const mine = (me.profile.services || []).filter((id) => id in ALL_SERVICES);
+  const mine = (me.profile.services || []).filter((id) => ALL_SERVICE_IDS.includes(id));
   const container = form.querySelector('[data-name="services"]');
   const selected = answers.services || mine;
-  if (mine.length) renderChips(container, Object.fromEntries(mine.map((id) => [id, ALL_SERVICES[id]])), selected);
+  if (mine.length) renderChips(container, mine.map((id) => [id, serviceName(id)]), selected);
   else renderServiceGroups(container, selected);
 }
 
@@ -131,104 +194,34 @@ async function copyText(text) {
   }
 }
 
-// ---------- Result card ----------
-// actions: { onSeen, onSkip, onAnother, onSave } — whichever are given become buttons.
-function resultCard(m, actions = {}) {
-  const isSeries = m.type === "series";
-  const meta = [
-    m.original !== m.title ? m.original : null,
-    m.year,
-    isSeries ? `серия ~${m.runtime} мин` : `${m.runtime} мин`,
-    `${m.minAge}+`,
-    m.genres.join(", "),
-    m.rating ? `★ ${m.rating}` : null,
-  ].filter(Boolean).join(" · ");
-
-  const links = el("div", { className: "links" });
-  for (const l of m.links) {
-    links.append(el("a", {
-      className: "primary button",
-      href: l.url,
-      target: "_blank",
-      rel: l.affiliate ? "sponsored noopener" : "noopener",
-      textContent: l.label || `Смотреть на ${l.service}`,
-    }));
-  }
-  if (m.trailerVideo) {
-    const play = el("button", { className: "secondary", textContent: "▶ Трейлер" });
-    play.addEventListener("click", () => openTrailer(m));
-    links.append(play);
-  } else {
-    links.append(el("a", { className: "secondary button", href: m.trailer, target: "_blank", rel: "noopener", textContent: "▶ Трейлер" }));
-  }
-
-  const where = m.whereEE && (m.whereEE.stream.length || m.whereEE.rent.length)
-    ? el("p", { className: "muted small" }, [
-        m.whereEE.stream.length ? `В Эстонии по подписке: ${m.whereEE.stream.join(", ")}.` : "",
-        m.whereEE.rent.length ? ` Напрокат: ${m.whereEE.rent.join(", ")}.` : "",
-      ].join(""))
-    : null;
-
-  const reason = m.elsewhere
-    ? `${m.reason} На твоих сервисах подходящего не нашлось — вот где это можно найти.`
-    : m.reason;
-
-  const buttons = el("div", { className: "actions" });
-  if (actions.onSave) {
-    const save = el("button", { className: "secondary", textContent: m.saved ? "★ В списке" : "☆ В список" });
-    save.addEventListener("click", async () => {
-      save.disabled = true;
-      try {
-        m.saved = await actions.onSave(m);
-        save.textContent = m.saved ? "★ В списке" : "☆ В список";
-      } finally {
-        save.disabled = false;
-      }
-    });
-    buttons.append(save);
-  }
-  if (actions.onSeen) buttons.append(button("👁 Уже видел", () => actions.onSeen(m)));
-  if (actions.onSkip) buttons.append(button("🙅 Не для меня", () => actions.onSkip(m)));
-  if (actions.onAnother) buttons.append(button("🔄 Другой вариант", () => actions.onAnother(m)));
-
-  const body = el("div", { className: "result-body" },
-    el("p", { className: "eyebrow", textContent: m.groupSize ? `Смотрим вместе · ${m.groupSize} чел.` : isSeries ? "Сериал на вечер" : "Сегодня смотрим" }),
-    m.logo ? el("img", { className: "title-logo", src: m.logo, alt: "", loading: "lazy" }) : null,
-    el("h2", { textContent: m.title }),
-    el("p", { className: "muted", textContent: meta }),
-    m.tagline ? el("p", { className: "tagline", textContent: `«${m.tagline}»` }) : null,
-    m.overview ? el("p", { className: "overview", textContent: m.overview }) : null,
-    factsList(m),
-    m.tmdbUrl ? el("a", { className: "tmdb-link", href: m.tmdbUrl, target: "_blank", rel: "noopener", textContent: "Подробнее на TMDB →" }) : null,
-    el("p", { textContent: reason }),
-    where,
-    links,
-    buttons.childElementCount ? buttons : null,
-    el("p", { className: "disclosure", textContent: "Некоторые ссылки — партнёрские: если ты оформишь подписку или купишь фильм, мы можем получить небольшую комиссию. Для тебя цена не меняется." }),
-  );
-
-  const card = el("article", { className: "card result flip" },
-    m.poster ? el("img", { className: "poster", src: m.poster, alt: `Постер: ${m.title}`, loading: "lazy" }) : null,
-    body,
-  );
-  return card;
+function button(text, onClick, className = "secondary") {
+  const b = el("button", { className, textContent: text });
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      await onClick(b);
+    } finally {
+      b.disabled = false;
+    }
+  });
+  return b;
 }
 
-// "About the film" facts from TMDB: release date, language, country, director, cast, seasons.
+// 1 серия, 2 серии, 5 серий (other languages use the same word for few/many).
+function plural(n) {
+  const d = n % 10, dd = n % 100;
+  if (d === 1 && dd !== 11) return t("ep.one");
+  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return t("ep.few");
+  return t("ep.many");
+}
+
+// ---------- Result card ----------
 function nameOf(type, code) {
   try {
-    return new Intl.DisplayNames(["ru"], { type }).of(type === "region" ? code.toUpperCase() : code);
+    return new Intl.DisplayNames([lang], { type }).of(type === "region" ? code.toUpperCase() : code);
   } catch {
     return code;
   }
-}
-
-// 1 серия, 2 серии, 5 серий.
-function plural(n, one, few, many) {
-  const d = n % 10, dd = n % 100;
-  if (d === 1 && dd !== 11) return one;
-  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return few;
-  return many;
 }
 
 function factsList(m) {
@@ -236,28 +229,134 @@ function factsList(m) {
   if (!f) return null;
   const isSeries = m.type === "series";
   const date = f.released
-    ? new Date(f.released).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
+    ? new Date(f.released).toLocaleDateString(lang === "et" ? "et-EE" : lang === "en" ? "en-GB" : "ru-RU", { day: "numeric", month: "long", year: "numeric" })
     : null;
   const rows = [
-    [isSeries ? "Первая серия" : "Дата выхода", date],
-    ["Язык оригинала", f.language ? nameOf("language", f.language) : null],
-    [f.countries.length > 1 ? "Страны" : "Страна", f.countries.map((c) => nameOf("region", c)).join(", ")],
-    [isSeries ? "Создатели" : f.directors.length > 1 ? "Режиссёры" : "Режиссёр", f.directors.join(", ")],
-    ["В ролях", f.cast.join(", ")],
-    ["Сезонов", f.seasons ? `${f.seasons}${f.episodes ? ` (${f.episodes} ${plural(f.episodes, "серия", "серии", "серий")})` : ""}` : null],
+    [t(isSeries ? "facts.firstAired" : "facts.released"), date],
+    [t("facts.language"), f.language ? nameOf("language", f.language) : null],
+    [t(f.countries.length > 1 ? "facts.countries" : "facts.country"), f.countries.map((c) => nameOf("region", c)).join(", ")],
+    [t(isSeries ? "facts.creators" : f.directors.length > 1 ? "facts.directors" : "facts.director"), f.directors.join(", ")],
+    [t("facts.cast"), f.cast.join(", ")],
+    [t("facts.seasons"), f.seasons ? `${f.seasons}${f.episodes ? ` (${t("facts.episodes", { n: f.episodes, word: plural(f.episodes) })})` : ""}` : null],
   ].filter(([, value]) => value);
   if (!rows.length) return null;
   return el("dl", { className: "facts" }, ...rows.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: v })]));
 }
 
-// Official trailer (chosen from TMDB data) played in a window on our page.
+function metaLine(m) {
+  return [
+    m.original && m.original !== m.title ? m.original : null,
+    m.year,
+    m.runtime ? (m.type === "series" ? t("res.episode", { n: m.runtime }) : t("res.min", { n: m.runtime })) : null,
+    m.minAge != null ? `${m.minAge}+` : null,
+    (m.genres || []).join(", "),
+    m.rating ? `★ ${m.rating}` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+// Tell the server someone clicked "Watch on …" (stats + "how was it?" later). Doesn't block the link.
+function trackClick(m, service) {
+  try {
+    fetch("/api/click", {
+      method: "POST",
+      keepalive: true,
+      headers: { "content-type": "application/json", "x-lang": lang },
+      body: JSON.stringify({ movieId: m.id, service, title: m.title }),
+      credentials: "same-origin",
+    }).catch(() => {});
+  } catch {
+    // Never break the link because of tracking.
+  }
+}
+
+// actions: { onSeen, onSkip, onAnother, onSave } — whichever are given become buttons.
+function resultCard(m, actions = {}, { animate = true } = {}) {
+  const isSeries = m.type === "series";
+  const links = el("div", { className: "links" });
+  for (const l of m.links) {
+    const a = el("a", {
+      className: "primary button",
+      href: l.url,
+      target: "_blank",
+      rel: l.affiliate ? "sponsored noopener" : "noopener",
+      textContent: l.label || t("res.watchOn", { service: l.service }),
+    });
+    a.addEventListener("click", () => trackClick(m, l.service));
+    links.append(a);
+  }
+  if (m.trailerVideo) {
+    links.append(button(t("res.trailer"), () => openTrailer(m)));
+  } else {
+    links.append(el("a", { className: "secondary button", href: m.trailer, target: "_blank", rel: "noopener", textContent: t("res.trailer") }));
+  }
+
+  const where = m.whereEE && (m.whereEE.stream.length || m.whereEE.rent.length)
+    ? el("p", { className: "muted small" },
+        (m.whereEE.stream.length ? t("res.whereStream", { list: m.whereEE.stream.join(", ") }) : "") +
+        (m.whereEE.rent.length ? t("res.whereRent", { list: m.whereEE.rent.join(", ") }) : ""))
+    : null;
+
+  const buttons = el("div", { className: "actions" });
+  if (actions.onSave) {
+    const save = el("button", { className: "secondary", textContent: t(m.saved ? "res.saved" : "res.save") });
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      try {
+        m.saved = await actions.onSave(m);
+        save.textContent = t(m.saved ? "res.saved" : "res.save");
+      } finally {
+        save.disabled = false;
+      }
+    });
+    buttons.append(save);
+  }
+  if (actions.onSeen) buttons.append(button(t("res.seen"), () => actions.onSeen(m)));
+  if (actions.onSkip) buttons.append(button(t("res.skip"), () => actions.onSkip(m)));
+  if (actions.onAnother) buttons.append(button(t("res.another"), () => actions.onAnother(m)));
+  buttons.append(button(t("res.share"), (b) => shareResult(m, b)));
+
+  const eyebrow = m.groupSize ? t("res.together", { n: m.groupSize }) : t(isSeries ? "res.seriesTonight" : "res.tonight");
+  const body = el("div", { className: "result-body" },
+    el("p", { className: "eyebrow", textContent: eyebrow }),
+    m.logo ? el("img", { className: "title-logo", src: m.logo, alt: "", loading: "lazy" }) : null,
+    el("h2", { textContent: m.title }),
+    el("p", { className: "muted", textContent: metaLine(m) }),
+    m.tagline ? el("p", { className: "tagline", textContent: `«${m.tagline}»` }) : null,
+    m.overview ? el("p", { className: "overview", textContent: m.overview }) : null,
+    factsList(m),
+    m.tmdbUrl ? el("a", { className: "tmdb-link", href: m.tmdbUrl, target: "_blank", rel: "noopener", textContent: t("res.tmdb") }) : null,
+    el("p", { textContent: m.elsewhere ? `${m.reason} ${t("res.elsewhere")}` : m.reason }),
+    where,
+    links,
+    buttons,
+    el("p", { className: "disclosure", textContent: t("res.disclosure") }),
+  );
+
+  return el("article", { className: `card result${animate ? " flip" : ""}` },
+    m.poster ? el("img", { className: "poster", src: m.poster, alt: t("res.poster", { title: m.title }), loading: "lazy" }) : null,
+    body,
+  );
+}
+
+function showResult(container, card) {
+  container.replaceChildren(card);
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function toggleSaved(m) {
+  const next = m.saved ? null : "saved";
+  await api("/api/list", { movieId: m.id, status: next });
+  return next === "saved";
+}
+
+// ---------- Trailer window ----------
 let trailerModal = null;
 
 function openTrailer(m) {
   if (!trailerModal) {
     const frame = el("div", { className: "video" });
     const caption = el("p", { className: "muted small" });
-    const close = el("button", { className: "link modal-close", textContent: "✕", ariaLabel: "Закрыть" });
+    const close = el("button", { className: "link modal-close", textContent: "✕" });
     const box = el("div", { className: "modal-box", role: "dialog", ariaModal: "true" }, close, frame, caption);
     const backdrop = el("div", { className: "modal", hidden: true }, box);
     const hide = () => {
@@ -272,60 +371,148 @@ function openTrailer(m) {
       if (e.key === "Escape" && !backdrop.hidden) hide();
     });
     document.body.append(backdrop);
-    trailerModal = { backdrop, frame, caption };
+    trailerModal = { backdrop, frame, caption, close };
   }
 
   const v = m.trailerVideo;
+  trailerModal.close.ariaLabel = t("trailer.close");
   trailerModal.frame.replaceChildren(el("iframe", {
-    src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&rel=0&modestbranding=1`,
-    title: `Трейлер: ${m.title}`,
+    src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&rel=0&modestbranding=1&hl=${lang}`,
+    title: t("trailer.title", { title: m.title }),
     allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
     allowFullscreen: true,
   }));
   trailerModal.caption.replaceChildren(
-    [v.official ? "Официальный трейлер" : "Трейлер", v.name]
+    [t(v.official ? "trailer.official" : "trailer.plain"), v.name]
       .filter((x, i, all) => x && all.findIndex((y) => y?.toLowerCase() === x.toLowerCase()) === i)
       .join(" · ") + " · ",
-    m.tmdbUrl
-      ? el("a", { href: `${m.tmdbUrl}/videos`, target: "_blank", rel: "noopener", textContent: "все видео на TMDB" })
-      : "",
+    m.tmdbUrl ? el("a", { href: `${m.tmdbUrl}/videos`, target: "_blank", rel: "noopener", textContent: t("trailer.allOnTmdb") }) : "",
   );
   trailerModal.backdrop.hidden = false;
 }
 
-function button(text, onClick) {
-  const b = el("button", { className: "secondary", textContent: text });
-  b.addEventListener("click", async () => {
-    b.disabled = true;
+// ---------- Share ----------
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function wrapLines(ctx, text, maxWidth, maxLines) {
+  const words = text.split(" ");
+  const lines = [];
+  let line = "";
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = w;
+    } else line = test;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    lines[maxLines - 1] += "…";
+  }
+  return lines;
+}
+
+// A 1080×1350 picture: poster, title, year/genres, and the site name.
+async function shareImage(m) {
+  const W = 1080, H = 1350;
+  const canvas = el("canvas", { width: W, height: H });
+  const ctx = canvas.getContext("2d");
+  const draw = (poster) => {
+    ctx.fillStyle = "#12111a";
+    ctx.fillRect(0, 0, W, H);
+    let y = 90;
+    if (poster) {
+      const pw = 520, ph = Math.round(poster.height * (pw / poster.width));
+      ctx.drawImage(poster, (W - pw) / 2, y, pw, ph);
+      y += ph + 70;
+    } else {
+      ctx.font = "200px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(m.type === "series" ? "📺" : "🎬", W / 2, y + 220);
+      y += 320;
+    }
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffb347";
+    ctx.font = "600 34px system-ui, sans-serif";
+    ctx.fillText(t(m.type === "series" ? "res.seriesTonight" : "res.tonight").toUpperCase(), W / 2, y);
+    ctx.fillStyle = "#f1eff8";
+    ctx.font = "700 64px system-ui, sans-serif";
+    for (const line of wrapLines(ctx, m.title, W - 140, 2)) {
+      y += 80;
+      ctx.fillText(line, W / 2, y);
+    }
+    ctx.fillStyle = "#a19db5";
+    ctx.font = "36px system-ui, sans-serif";
+    ctx.fillText([m.year, (m.genres || []).slice(0, 3).join(", ")].filter(Boolean).join(" · "), W / 2, y + 64);
+    ctx.fillStyle = "#ffb347";
+    ctx.font = "600 38px system-ui, sans-serif";
+    ctx.fillText(`🍿 ${t("app.name")} · ${location.host}`, W / 2, H - 70);
+  };
+  const toBlob = () => new Promise((resolve, reject) => {
     try {
-      await onClick();
-    } finally {
-      b.disabled = false;
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no blob"))), "image/png");
+    } catch (e) {
+      reject(e); // canvas "tainted" if the poster can't be shared
     }
   });
-  return b;
+  let poster = null;
+  if (m.poster) poster = await loadImage(m.poster).catch(() => null);
+  draw(poster);
+  try {
+    return await toBlob();
+  } catch {
+    draw(null);
+    return toBlob();
+  }
 }
 
-function showResult(container, card) {
-  container.replaceChildren(card);
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-async function toggleSaved(m) {
-  const next = m.saved ? null : "saved";
-  await api("/api/list", { movieId: m.id, status: next });
-  return next === "saved";
+async function shareResult(m, b) {
+  const text = t("res.shareText", { title: m.title });
+  const url = location.origin;
+  try {
+    const blob = await shareImage(m);
+    const file = new File([blob], "movie-tonight.png", { type: "image/png" });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], text: `${text} ${url}` });
+      return;
+    }
+  } catch (err) {
+    if (err?.name === "AbortError") return; // user closed the share sheet
+  }
+  if (navigator.share) {
+    try {
+      await navigator.share({ text, url });
+      return;
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+    }
+  }
+  if (await copyText(`${text} ${url}`)) b.textContent = t("res.shared");
 }
 
 // ---------- 1. Auth ----------
 let authMode = "login";
+
+function updateAuthLabels() {
+  $("#auth-submit").textContent = t({ login: "auth.doLogin", register: "auth.doRegister", reset: "auth.doReset" }[authMode]);
+  $("#password-label").textContent = t(authMode === "reset" ? "auth.newPassword" : "auth.password");
+}
+
 document.querySelectorAll("#screen-auth .tab").forEach((tab) =>
   tab.addEventListener("click", () => {
     authMode = tab.dataset.mode;
-    document.querySelectorAll("#screen-auth .tab").forEach((t) => t.classList.toggle("active", t === tab));
+    document.querySelectorAll("#screen-auth .tab").forEach((x) => x.classList.toggle("active", x === tab));
     const form = $("#auth-form");
-    $("#auth-submit").textContent = { login: "Войти", register: "Создать аккаунт", reset: "Задать новый пароль" }[authMode];
-    $("#password-label").textContent = authMode === "reset" ? "Новый пароль" : "Пароль";
+    updateAuthLabels();
     form.password.autocomplete = authMode === "login" ? "current-password" : "new-password";
     $("#code-field").hidden = authMode !== "reset";
     form.code.required = authMode === "reset";
@@ -355,6 +542,7 @@ function showRecoveryCode(code) {
   $("#recovery-code").textContent = code;
   $("#code-saved").checked = false;
   $("#code-continue").disabled = true;
+  $("#copy-code").textContent = t("code.copy");
   show("code");
 }
 
@@ -362,31 +550,32 @@ $("#code-saved").addEventListener("change", (e) => {
   $("#code-continue").disabled = !e.target.checked;
 });
 $("#copy-code").addEventListener("click", async (e) => {
-  e.target.textContent = (await copyText($("#recovery-code").textContent)) ? "Скопировано ✓" : "Выдели и скопируй вручную";
+  e.target.textContent = t((await copyText($("#recovery-code").textContent)) ? "code.copied" : "code.copyManually");
 });
 $("#code-continue").addEventListener("click", () => start());
 
 $("#logout").addEventListener("click", async () => {
   await api("/api/logout", {}).catch(() => {});
   me = null;
+  lastResult = null;
   $("#result").replaceChildren();
   show("auth");
 });
 
 // ---------- 2. Onboarding ----------
-function openOnboarding() {
-  const p = me.profile || {};
+function openOnboarding(values) {
+  const p = values || me.profile || {};
   const form = $("#profile-form");
-  renderChips(form.querySelector('[data-name="ageGroup"]'), OPTIONS.ageGroup, [p.ageGroup]);
-  renderChips(form.querySelector('[data-name="favoriteGenres"]'), OPTIONS.genres, p.favoriteGenres || []);
-  renderChips(form.querySelector('[data-name="dislikedGenres"]'), OPTIONS.genres, p.dislikedGenres || []);
-  renderChips(form.querySelector('[data-name="vibe"]'), OPTIONS.vibe, [p.vibe || "both"]);
+  renderChips(form.querySelector('[data-name="ageGroup"]'), opts("ageGroup", "age"), [p.ageGroup]);
+  renderChips(form.querySelector('[data-name="favoriteGenres"]'), opts("genres", "genre"), p.favoriteGenres || []);
+  renderChips(form.querySelector('[data-name="dislikedGenres"]'), opts("genres", "genre"), p.dislikedGenres || []);
+  renderChips(form.querySelector('[data-name="vibe"]'), opts("vibe", "vibe"), [p.vibe || "both"]);
   renderServiceGroups(form.querySelector('[data-name="services"]'), p.services || []);
   $("#profile-error").textContent = "";
-  show("onboarding");
+  if (screen !== "onboarding") show("onboarding");
 }
 
-$("#edit-profile").addEventListener("click", openOnboarding);
+$("#edit-profile").addEventListener("click", () => openOnboarding());
 
 $("#profile-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -404,8 +593,19 @@ $("#profile-form").addEventListener("submit", async (e) => {
 function openPicker() {
   renderAnswers($("#pick-form"));
   $("#result").replaceChildren();
+  lastResult = null;
   $("#pick-error").textContent = "";
   show("picker");
+  loadFeedback();
+}
+
+function pickerActions(m) {
+  return {
+    onSave: toggleSaved,
+    onSeen: async () => { await api("/api/list", { movieId: m.id, status: "seen" }); await pick(false); },
+    onSkip: async () => { await api("/api/list", { movieId: m.id, status: "skip" }); await pick(false); },
+    onAnother: () => pick(false),
+  };
 }
 
 async function pick(fresh) {
@@ -414,12 +614,8 @@ async function pick(fresh) {
   try {
     const m = await api("/api/recommend", { ...readForm($("#pick-form")), exclude: shown });
     shown.push(m.id);
-    showResult($("#result"), resultCard(m, {
-      onSave: toggleSaved,
-      onSeen: async () => { await api("/api/list", { movieId: m.id, status: "seen" }); await pick(false); },
-      onSkip: async () => { await api("/api/list", { movieId: m.id, status: "skip" }); await pick(false); },
-      onAnother: () => pick(false),
-    }));
+    lastResult = m;
+    showResult($("#result"), resultCard(m, pickerActions(m)));
   } catch (err) {
     if (err.status === 401) return show("auth");
     $("#pick-error").textContent = err.message;
@@ -432,13 +628,52 @@ $("#pick-form").addEventListener("submit", (e) => {
   pick(true);
 });
 
+// 🎲 Surprise me: random mood, any length, movie or series — and show those choices in the form.
+$("#surprise").addEventListener("click", () => {
+  const form = $("#pick-form");
+  const current = readForm(form);
+  const mood = IDS.mood[Math.floor(Math.random() * IDS.mood.length)];
+  renderAnswers(form, { mood, duration: "long", kind: "any", services: current.services?.length ? current.services : undefined });
+  pick(true);
+});
+
+// "How was it?" — asked a couple of hours after you clicked "Watch on …".
+async function loadFeedback() {
+  const box = $("#feedback");
+  box.hidden = true;
+  try {
+    const { item } = await api("/api/feedback");
+    if (!item || screen !== "picker") return;
+    box.dataset.movieId = item.id;
+    $("#feedback-question").textContent = t("fb.question", { title: item.title });
+    box.querySelector(".actions").hidden = false;
+    box.hidden = false;
+  } catch {
+    // Not important enough to show an error.
+  }
+}
+
+$("#feedback").querySelectorAll("[data-rating]").forEach((b) =>
+  b.addEventListener("click", async () => {
+    const box = $("#feedback");
+    try {
+      await api("/api/feedback", { movieId: box.dataset.movieId, rating: Number(b.dataset.rating) });
+      $("#feedback-question").textContent = t("fb.thanks");
+      box.querySelector(".actions").hidden = true;
+      setTimeout(loadFeedback, 2500); // maybe there's another one to ask about
+    } catch {
+      box.hidden = true;
+    }
+  }),
+);
+
 // ---------- 4. My list ----------
 let listStatus = "saved";
 let listData = null;
 
 async function openList() {
   show("list");
-  $("#list-items").replaceChildren(el("p", { className: "muted", textContent: "Загрузка…" }));
+  $("#list-items").replaceChildren(el("p", { className: "muted", textContent: t("list.loading") }));
   try {
     listData = await api("/api/list");
     renderList();
@@ -448,13 +683,10 @@ async function openList() {
 }
 
 function renderList() {
-  document.querySelectorAll("#list-tabs .tab").forEach((t) => t.classList.toggle("active", t.dataset.status === listStatus));
+  document.querySelectorAll("#list-tabs .tab").forEach((x) => x.classList.toggle("active", x.dataset.status === listStatus));
+  if (!listData) return;
   const items = listData[listStatus];
-  const empty = {
-    saved: "Пока пусто. Нажми «☆ В список» на любом фильме, чтобы сохранить его на потом.",
-    seen: "Здесь будут фильмы, которые ты отметил «👁 Уже видел».",
-    skip: "Здесь будут фильмы, которые ты отметил «🙅 Не для меня». Они больше не будут предлагаться.",
-  }[listStatus];
+  const empty = t({ saved: "list.emptySaved", seen: "list.emptySeen", skip: "list.emptySkip" }[listStatus]);
   if (!items.length) return $("#list-items").replaceChildren(el("p", { className: "muted", textContent: empty }));
 
   $("#list-items").replaceChildren(...items.map((m) => {
@@ -464,14 +696,15 @@ function renderList() {
       listData = await api("/api/list");
       renderList();
     };
-    if (listStatus === "saved") actions.append(button("👁 Посмотрел", () => move("seen")), button("Убрать", () => move(null)));
-    if (listStatus === "seen") actions.append(button("Убрать", () => move(null)));
-    if (listStatus === "skip") actions.append(button("Вернуть в подбор", () => move(null)));
+    if (listStatus === "saved") actions.append(button(t("list.watched"), () => move("seen")), button(t("list.remove"), () => move(null)));
+    if (listStatus === "seen") actions.append(button(t("list.remove"), () => move(null)));
+    if (listStatus === "skip") actions.append(button(t("list.restore"), () => move(null)));
+    const rated = m.rating === 1 ? " · 👍" : m.rating === -1 ? " · 👎" : "";
     return el("div", { className: "list-item" },
       m.poster ? el("img", { className: "thumb", src: m.poster, alt: "", loading: "lazy" }) : el("div", { className: "thumb placeholder", textContent: m.type === "series" ? "📺" : "🎬" }),
       el("div", {},
         el("p", { className: "list-title", textContent: m.title }),
-        el("p", { className: "muted small", textContent: `${m.year} · ${m.type === "series" ? "сериал" : "фильм"} · ${m.genres.join(", ")}` }),
+        el("p", { className: "muted small", textContent: [m.year, t(m.type === "series" ? "list.series" : "list.movie"), (m.genres || []).join(", ")].filter(Boolean).join(" · ") + rated }),
         actions,
       ),
     );
@@ -481,12 +714,12 @@ function renderList() {
 document.querySelectorAll("#list-tabs .tab").forEach((tab) =>
   tab.addEventListener("click", () => {
     listStatus = tab.dataset.status;
-    if (listData) renderList();
+    renderList();
   }),
 );
 
 $("#new-code").addEventListener("click", async () => {
-  if (!confirm("Создать новый код? Старый перестанет работать.")) return;
+  if (!confirm(t("list.newCodeConfirm"))) return;
   try {
     const { recoveryCode } = await api("/api/recovery-code", {});
     showRecoveryCode(recoveryCode);
@@ -515,7 +748,7 @@ async function openRoom(code) {
   $("#room-view").hidden = false;
   $("#room-error").textContent = "";
   $("#room-result").replaceChildren();
-  room = { code: code.toUpperCase(), timer: null, resultId: null, shown: [] };
+  room = { code: code.toUpperCase(), timer: null, renderKey: null, shown: [], state: null };
   try {
     let state = await api(`/api/rooms/${room.code}`);
     if (!state.joined) state = await api(`/api/rooms/${room.code}/join`, {});
@@ -542,33 +775,79 @@ function stopRoomPolling() {
   room.timer = null;
 }
 
-function renderRoom(state) {
+function memberLabel(m) {
+  const name = m.owner ? t("room.owner") : t("room.guest", { n: m.guest });
+  return `${m.ready ? "✅" : "⏳"} ${name}${m.you ? t("room.you") : ""}${m.voted ? t("room.votedMark") : ""}`;
+}
+
+function renderRoom(state, force = false) {
+  room.state = state;
   $("#room-code").textContent = state.code;
   $("#room-link").value = roomLink(state.code);
-  $("#room-members").replaceChildren(...state.members.map((m) =>
-    el("li", { className: m.ready ? "ready" : "" }, `${m.ready ? "✅" : "⏳"} ${m.label}${m.you ? " (ты)" : ""}`),
-  ));
+  $("#room-members").replaceChildren(...state.members.map((m) => el("li", { className: m.ready ? "ready" : "" }, memberLabel(m))));
   const readyCount = state.members.filter((m) => m.ready).length;
-  $("#room-owner").hidden = !state.isOwner;
-  $("#room-owner-hint").textContent = `Готовы: ${readyCount} из ${state.members.length}. Подбор учтёт тех, кто нажал «Я готов».`;
-  $("#room-wait").hidden = state.isOwner || Boolean(state.result);
-  $("#room-ready").textContent = state.myAnswers ? "Обновить мои ответы" : "Я готов";
-
   const r = state.result;
-  if (r && r.id !== room.resultId) {
-    room.resultId = r.id;
-    if (!room.shown.includes(r.id)) room.shown.push(r.id);
-    showResult($("#room-result"), resultCard(r, {
-      onSave: toggleSaved,
-      onAnother: state.isOwner ? () => pickForRoom() : null,
-    }));
+  $("#room-owner").hidden = !state.isOwner;
+  $("#room-owner-hint").textContent = t("room.readyCount", { ready: readyCount, all: state.members.length });
+  $("#room-pick").textContent = t(r ? "room.newOptions" : "room.pick");
+  $("#room-wait").hidden = state.isOwner || Boolean(r);
+  $("#room-ready").textContent = t(state.myAnswers ? "room.update" : "room.ready");
+
+  // Only redraw the result area when something in it changed (so cards don't flicker every 4 s).
+  const key = JSON.stringify(r && [r.stage, r.stage === "voting" ? r.options.map((o) => o.id) : r.movie.id, r.counts, r.myVote, lang]);
+  if (key === room.renderKey && !force) return;
+  const firstFinal = r?.stage === "final" && !room.renderKey?.includes('"final"');
+  room.renderKey = key;
+  if (!r) return $("#room-result").replaceChildren();
+
+  if (r.stage === "voting") {
+    for (const o of r.options) if (!room.shown.includes(o.id)) room.shown.push(o.id);
+    $("#room-result").replaceChildren(votingView(state));
+    return;
   }
+  if (!room.shown.includes(r.movie.id)) room.shown.push(r.movie.id);
+  const card = resultCard({ ...r.movie, groupSize: r.groupSize }, { onSave: toggleSaved }, { animate: firstFinal || force === "animate" });
+  const top = r.counts?.length ? Math.max(...r.counts) : 0;
+  const parts = [top ? el("p", { className: "muted", textContent: t("room.winner", { n: top }) }) : null, card].filter(Boolean);
+  $("#room-result").replaceChildren(...parts);
+  if (firstFinal) card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function votingView(state) {
+  const r = state.result;
+  const cards = r.options.map((o, i) => {
+    const mine = r.myVote === i;
+    return el("article", { className: `card option${mine ? " chosen" : ""}` },
+      o.poster ? el("img", { className: "option-poster", src: o.poster, alt: "", loading: "lazy" })
+        : el("div", { className: "option-poster placeholder", textContent: o.type === "series" ? "📺" : "🎬" }),
+      el("div", { className: "option-body" },
+        el("h3", { textContent: o.title }),
+        el("p", { className: "muted small", textContent: metaLine(o) }),
+        o.overview ? el("p", { className: "small clamp", textContent: o.overview }) : null,
+        el("p", { className: "muted small", textContent: t("room.votes", { n: r.counts[i] }) }),
+        el("div", { className: "actions" },
+          mine ? el("span", { className: "voted", textContent: t("room.myVote") })
+            : button(t("room.vote"), async () => renderRoom(await api(`/api/rooms/${room.code}/vote`, { index: i }), true), "primary"),
+          o.trailerVideo ? button(t("res.trailer"), () => openTrailer(o)) : null,
+        ),
+      ),
+    );
+  });
+  const wrap = el("div", { className: "voting" },
+    el("h2", { textContent: t("room.voteTitle") }),
+    el("p", { className: "muted", textContent: t("room.voteText") }),
+    el("div", { className: "options" }, ...cards),
+  );
+  if (state.isOwner) {
+    wrap.append(button(t("room.finish"), async () => renderRoom(await api(`/api/rooms/${room.code}/finish`, {}), "animate")));
+  }
+  return wrap;
 }
 
 async function pickForRoom() {
   $("#room-error").textContent = "";
   try {
-    renderRoom(await api(`/api/rooms/${room.code}/pick`, { exclude: room.shown }));
+    renderRoom(await api(`/api/rooms/${room.code}/pick`, { exclude: room.shown }), true);
   } catch (err) {
     $("#room-error").textContent = err.message;
   }
@@ -609,20 +888,69 @@ $("#room-share").addEventListener("click", async (e) => {
   const link = roomLink(room.code);
   if (navigator.share) {
     try {
-      await navigator.share({ title: "Что посмотреть вместе", text: "Выбираем фильм на вечер — заходи:", url: link });
+      await navigator.share({ title: t("app.name"), text: t("room.shareMsg"), url: link });
       return;
     } catch {
       // Cancelled or not allowed — fall back to copying.
     }
   }
-  e.target.textContent = (await copyText(link)) ? "Скопировано ✓" : "Скопируй ссылку вручную";
+  e.target.textContent = t((await copyText(link)) ? "room.copied" : "room.copyManually");
 });
+
+// ---------- 6. Stats (admin only) ----------
+let lastStats = null;
+
+async function openStats() {
+  show("stats");
+  $("#stats-body").replaceChildren(el("p", { className: "muted", textContent: t("loading") }));
+  try {
+    lastStats = await api("/api/stats");
+    renderStats();
+  } catch (err) {
+    $("#stats-body").replaceChildren(el("p", { className: "error", textContent: err.message }));
+  }
+}
+
+function barTable(rows, labelKey) {
+  if (!rows.length) return el("p", { className: "muted", textContent: t("stats.none") });
+  const max = Math.max(...rows.map((r) => r.n));
+  return el("div", { className: "bars" }, ...rows.map((r) =>
+    el("div", { className: "bar-row" },
+      el("span", { className: "bar-label", textContent: r[labelKey] || "—" }),
+      el("span", { className: "bar-track" }, el("span", { className: "bar-fill", style: `width:${Math.max(4, (r.n / max) * 100)}%` })),
+      el("span", { className: "bar-value", textContent: r.n }),
+    ),
+  ));
+}
+
+function renderStats() {
+  const s = lastStats;
+  if (!s) return;
+  const tile = (label, value) => el("div", { className: "tile" }, el("p", { className: "tile-value", textContent: value }), el("p", { className: "muted small", textContent: label }));
+  const maxDay = Math.max(1, ...s.clicksPerDay);
+  const days = el("div", { className: "days" }, ...s.clicksPerDay.map((n) =>
+    el("span", { className: "day", title: String(n), style: `height:${Math.max(2, (n / maxDay) * 100)}%` }),
+  ));
+  $("#stats-body").replaceChildren(
+    el("div", { className: "tiles" },
+      tile(t("stats.users"), s.users),
+      tile(t("stats.newUsers"), s.newUsers7),
+      tile(t("stats.rooms"), s.rooms30),
+      tile(t("stats.ratings"), `${s.ratings.up} / ${s.ratings.down}`),
+    ),
+    el("div", { className: "card" }, el("h2", { className: "small-heading", textContent: t("stats.clicks30") }), barTable(s.clicks30, "service")),
+    el("div", { className: "card" }, el("h2", { className: "small-heading", textContent: t("stats.perDay") }), days),
+    el("div", { className: "card" }, el("h2", { className: "small-heading", textContent: t("stats.top") }), barTable(s.topTitles, "title")),
+    el("div", { className: "card" }, el("h2", { className: "small-heading", textContent: t("stats.clicksAll") }), barTable(s.clicksAll, "service")),
+  );
+}
 
 // ---------- Navigation ----------
 document.querySelectorAll("[data-go]").forEach((b) =>
   b.addEventListener("click", () => {
     if (b.dataset.go === "list") openList();
     if (b.dataset.go === "room") room.code ? openRoom(room.code) : openRoomStart();
+    if (b.dataset.go === "stats") openStats();
   }),
 );
 
@@ -633,11 +961,28 @@ $("#home").addEventListener("click", () => {
   openPicker();
 });
 
+// Redraw the current screen in the new language, keeping what the user already chose.
+function rerender() {
+  if (screen === "onboarding") openOnboarding(readForm($("#profile-form")));
+  if (screen === "picker") {
+    renderAnswers($("#pick-form"), readForm($("#pick-form")));
+    if (lastResult) $("#result").replaceChildren(resultCard(lastResult, pickerActions(lastResult), { animate: false }));
+    loadFeedback();
+  }
+  if (screen === "list") openList();
+  if (screen === "room" && room.state) {
+    renderAnswers($("#room-form"), readForm($("#room-form")));
+    renderRoom(room.state, true);
+  }
+  if (screen === "stats") renderStats();
+}
+
 // ---------- Start ----------
 async function start() {
   try {
     me = await api("/api/me");
   } catch {
+    me = null;
     return show("auth");
   }
   if (!me.profile) return openOnboarding();
@@ -652,4 +997,6 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
+applyI18n();
+applyTheme(stored("theme") || "auto");
 start();

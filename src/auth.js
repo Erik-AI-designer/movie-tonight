@@ -59,10 +59,10 @@ function checkCredentials(email, password) {
   email = String(email || "").trim().toLowerCase();
   password = String(password || "");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 200) {
-    throw new HttpError(400, "Проверь email");
+    throw new HttpError(400, "err.email");
   }
   if (password.length < 8 || password.length > 200) {
-    throw new HttpError(400, "Пароль должен быть не короче 8 символов");
+    throw new HttpError(400, "err.password");
   }
   return { email, password };
 }
@@ -104,7 +104,7 @@ async function recordAttempt(env, kind, value) {
 async function guard(env, checks) {
   for (const [kind, value] of checks) {
     if (await tooMany(env, kind, value)) {
-      throw new HttpError(429, "Слишком много попыток. Подожди 15 минут и попробуй снова.");
+      throw new HttpError(429, "err.tooMany");
     }
   }
 }
@@ -129,7 +129,7 @@ export async function register(env, rawEmail, rawPassword, ip) {
   await guard(env, [["reg-ip", ip]]);
   const { email, password } = checkCredentials(rawEmail, rawPassword);
   const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
-  if (existing) throw new HttpError(409, "Такой email уже зарегистрирован — попробуй войти");
+  if (existing) throw new HttpError(409, "err.emailTaken");
 
   const salt = randomHex(16);
   const passHash = await hashPassword(password, salt);
@@ -154,7 +154,7 @@ export async function login(env, rawEmail, rawPassword, ip) {
   if (!user || !sameHash(hash, user.pass_hash)) {
     await recordAttempt(env, "login-email", email);
     await recordAttempt(env, "login-ip", ip);
-    throw new HttpError(401, "Неверный email или пароль");
+    throw new HttpError(401, "err.badLogin");
   }
   await env.DB.prepare("DELETE FROM attempts WHERE key = ?").bind(`login-email:${email}`).run();
   return startSession(env, user.id);
@@ -174,7 +174,7 @@ export async function resetPassword(env, rawEmail, rawCode, rawPassword, ip) {
   if (!row || !sameHash(codeHash, row.code_hash)) {
     await recordAttempt(env, "login-email", email);
     await recordAttempt(env, "reset-ip", ip);
-    throw new HttpError(401, "Неверный email или код восстановления");
+    throw new HttpError(401, "err.badCode");
   }
 
   const salt = randomHex(16);

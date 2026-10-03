@@ -18,11 +18,11 @@ function pickList(value, allowed) {
 
 export function validateProfile(body) {
   const ageGroup = body?.ageGroup;
-  if (!(ageGroup in AGE_GROUPS)) throw new HttpError(400, "Выбери возраст");
+  if (!(ageGroup in AGE_GROUPS)) throw new HttpError(400, "err.age");
 
   const genreIds = Object.keys(GENRES);
   const favoriteGenres = pickList(body.favoriteGenres, genreIds);
-  if (favoriteGenres.length === 0) throw new HttpError(400, "Выбери хотя бы один любимый жанр");
+  if (favoriteGenres.length === 0) throw new HttpError(400, "err.genre");
 
   // A genre can't be both a favorite and disliked.
   const dislikedGenres = pickList(body.dislikedGenres, genreIds).filter((g) => !favoriteGenres.includes(g));

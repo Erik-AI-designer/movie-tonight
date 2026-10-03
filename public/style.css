@@ -207,3 +207,77 @@ input[type="text"] {
 .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .modal .small { margin: 10px 4px 0; }
 .modal a { color: var(--accent); }
+
+/* ---------- Light theme (⚙️ → Тема, or follows the system) ---------- */
+:root { --accent-ink: var(--accent); --logo-glow: rgba(255, 255, 255, 0.5); }
+:root[data-theme="light"] {
+  --bg: #f6f4fb; --card: #ffffff; --line: #e2deed; --text: #1b1a24; --muted: #69657d;
+  --accent: #ffb347; --accent-text: #1a1206; --accent-ink: #a85600; --error: #c62828; --logo-glow: rgba(0, 0, 0, 0.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f4fb; --card: #ffffff; --line: #e2deed; --text: #1b1a24; --muted: #69657d;
+    --accent: #ffb347; --accent-text: #1a1206; --accent-ink: #a85600; --error: #c62828; --logo-glow: rgba(0, 0, 0, 0.35);
+    color-scheme: light;
+  }
+}
+.eyebrow, .tmdb-link, .code-badge, .modal a { color: var(--accent-ink); }
+.title-logo { filter: drop-shadow(0 0 1px var(--logo-glow)); }
+.pre { white-space: pre-line; }
+
+/* ---------- Header: ⚙️ settings menu ---------- */
+nav { align-items: center; }
+#nav { display: contents; }
+.top { position: relative; }
+.settings { position: static; } /* the menu is placed relative to the header, so it never leaves the screen */
+.settings summary { list-style: none; cursor: pointer; font-size: 1.1rem; }
+.settings summary::-webkit-details-marker { display: none; }
+.settings-menu {
+  position: absolute; right: 16px; top: calc(100% - 8px); z-index: 5; width: min(240px, calc(100% - 32px)); margin: 0; padding: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); display: grid; gap: 4px;
+}
+.settings-menu label { margin-bottom: 8px; font-size: 0.9rem; }
+.settings-menu select {
+  display: block; width: 100%; margin-top: 4px; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit;
+}
+#account-actions { display: grid; justify-items: start; border-top: 1px solid var(--line); padding-top: 8px; }
+#account-actions .link { padding: 6px 0; color: var(--text); }
+
+/* ---------- 🎲 Surprise me + 👍/👎 banner ---------- */
+.surprise {
+  width: 100%; padding: 16px; border-radius: 16px; border: 1px dashed var(--accent);
+  background: transparent; color: var(--text); font-weight: 600; font-size: 1.05rem;
+}
+.surprise:hover { background: var(--card); }
+.feedback { border-color: var(--accent); margin-top: 24px; }
+.feedback p { margin: 0 0 8px; font-weight: 600; }
+.feedback .actions { margin-top: 0; }
+
+/* ---------- Room voting ---------- */
+.voting h2 { margin-top: 24px; }
+.options { display: grid; gap: 12px; }
+.option { display: flex; gap: 14px; align-items: flex-start; margin-top: 0; }
+.option.chosen { border-color: var(--accent); }
+.option h3 { margin: 0 0 2px; font-size: 1.1rem; }
+.option-body { flex: 1; min-width: 0; }
+.option-poster { width: 92px; border-radius: 10px; flex-shrink: 0; }
+.option-poster.placeholder { height: 138px; display: grid; place-items: center; background: var(--bg); border: 1px solid var(--line); font-size: 2rem; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.voted { color: var(--accent-ink); font-weight: 600; align-self: center; }
+.voting > .secondary { margin-top: 16px; }
+
+/* ---------- Stats ---------- */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 16px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.tile-value { font-size: 1.8rem; font-weight: 700; margin: 0; }
+.tile .small { margin: 0; }
+.bars { display: grid; gap: 8px; margin-top: 12px; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 35%) 1fr auto; gap: 10px; align-items: center; font-size: 0.9rem; }
+.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 10px; background: var(--bg); border-radius: 999px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.bar-value { font-variant-numeric: tabular-nums; color: var(--muted); }
+.days { display: flex; align-items: flex-end; gap: 3px; height: 120px; margin-top: 12px; }
+.day { flex: 1; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; }

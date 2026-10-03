@@ -63,3 +63,25 @@ CREATE TABLE IF NOT EXISTS tmdb_cache (
   data       TEXT NOT NULL,
   fetched_at INTEGER NOT NULL
 );
+
+-- 👍/👎 after watching. `genres` = our genre ids of the title (JSON), so taste can be computed without TMDB.
+CREATE TABLE IF NOT EXISTS ratings (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  movie_id   TEXT NOT NULL,
+  rating     INTEGER NOT NULL,  -- 1 = 👍, -1 = 👎
+  genres     TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, movie_id)
+);
+
+-- Clicks on "Watch on …" buttons, for the stats page.
+CREATE TABLE IF NOT EXISTS clicks (
+  id       INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  movie_id TEXT NOT NULL,
+  title    TEXT,
+  service  TEXT NOT NULL,
+  at       INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS clicks_at ON clicks(at);

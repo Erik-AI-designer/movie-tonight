@@ -12,106 +12,147 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Что посмотреть">
+  <script>
+    // Apply the saved theme before the page draws, so it doesn't flash.
+    try { const th = localStorage.getItem("theme"); if (th === "light" || th === "dark") document.documentElement.dataset.theme = th; } catch {}
+  </script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="top">
-    <button class="logo link" id="home">🍿 Что посмотреть</button>
-    <nav id="nav" hidden>
-      <button class="link" data-go="list">⭐ Мой список</button>
-      <button class="link" data-go="room">👥 С друзьями</button>
-      <button class="link" id="edit-profile">Мои ответы</button>
-      <button class="link" id="logout">Выйти</button>
+    <button class="logo link" id="home" data-i18n="app.short">🍿 Что посмотреть</button>
+    <nav>
+      <span id="nav" hidden>
+        <button class="link" data-go="list" data-i18n="nav.list">⭐ Мой список</button>
+        <button class="link" data-go="room" data-i18n="nav.room">👥 С друзьями</button>
+        <button class="link" data-go="stats" id="nav-stats" data-i18n="nav.stats" hidden>📊 Статистика</button>
+      </span>
+      <details class="settings" id="settings">
+        <summary class="link" data-i18n-title="nav.settings" title="Настройки">⚙️</summary>
+        <div class="settings-menu card">
+          <label><span data-i18n="set.lang">Язык</span>
+            <select id="lang-select">
+              <option value="ru">Русский</option>
+              <option value="et">Eesti</option>
+              <option value="en">English</option>
+            </select>
+          </label>
+          <label><span data-i18n="set.theme">Тема</span>
+            <select id="theme-select">
+              <option value="auto" data-i18n="theme.auto">как в системе</option>
+              <option value="light" data-i18n="theme.light">светлая</option>
+              <option value="dark" data-i18n="theme.dark">тёмная</option>
+            </select>
+          </label>
+          <div id="account-actions" hidden>
+            <button class="link" id="edit-profile" data-i18n="nav.profile">Мои ответы</button>
+            <button class="link" id="logout" data-i18n="nav.logout">Выйти</button>
+          </div>
+        </div>
+      </details>
     </nav>
   </header>
 
   <main>
-    <p id="loading" class="muted">Загрузка…</p>
+    <p id="loading" class="muted" data-i18n="loading">Загрузка…</p>
 
     <!-- Login / register / reset password -->
     <section id="screen-auth" hidden>
-      <h1>Один фильм на вечер.<br>Без часа листания.</h1>
-      <p class="muted">Войди, чтобы получить подборку — мы зададим пару вопросов о твоих вкусах.</p>
+      <h1 class="pre" data-i18n="auth.title">Один фильм на вечер.
+Без часа листания.</h1>
+      <p class="muted" data-i18n="auth.sub">Войди, чтобы получить подборку — мы зададим пару вопросов о твоих вкусах.</p>
       <div class="tabs">
-        <button class="tab active" data-mode="login">Вход</button>
-        <button class="tab" data-mode="register">Регистрация</button>
-        <button class="tab" data-mode="reset">Забыл пароль</button>
+        <button class="tab active" data-mode="login" data-i18n="auth.login">Вход</button>
+        <button class="tab" data-mode="register" data-i18n="auth.register">Регистрация</button>
+        <button class="tab" data-mode="reset" data-i18n="auth.reset">Забыл пароль</button>
       </div>
       <form id="auth-form" class="card">
-        <label>Email <input type="email" name="email" autocomplete="email" required></label>
-        <label id="code-field" hidden>Код восстановления
+        <label><span data-i18n="auth.email">Email</span> <input type="email" name="email" autocomplete="email" required></label>
+        <label id="code-field" hidden><span data-i18n="auth.code">Код восстановления</span>
           <input type="text" name="code" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX">
         </label>
-        <label><span id="password-label">Пароль</span>
+        <label><span id="password-label" data-i18n="auth.password">Пароль</span>
           <input type="password" name="password" minlength="8" autocomplete="current-password" required>
         </label>
-        <button type="submit" class="primary" id="auth-submit">Войти</button>
+        <button type="submit" class="primary" id="auth-submit" data-i18n="auth.doLogin">Войти</button>
         <p class="error" id="auth-error"></p>
       </form>
     </section>
 
     <!-- Recovery code, shown once after registering or resetting -->
     <section id="screen-code" hidden>
-      <h1>Сохрани код восстановления</h1>
-      <p class="muted">Если забудешь пароль, этим кодом можно задать новый. Мы показываем его только один раз — сфотографируй, запиши или сохрани в заметках.</p>
+      <h1 data-i18n="code.title">Сохрани код восстановления</h1>
+      <p class="muted" data-i18n="code.text">Если забудешь пароль, этим кодом можно задать новый.</p>
       <div class="card">
         <p class="recovery-code" id="recovery-code"></p>
-        <button class="secondary" id="copy-code">Скопировать</button>
-        <label class="check"><input type="checkbox" id="code-saved"> Я сохранил код</label>
-        <button class="primary" id="code-continue" disabled>Дальше</button>
+        <button class="secondary" id="copy-code" data-i18n="code.copy">Скопировать</button>
+        <label class="check"><input type="checkbox" id="code-saved"> <span data-i18n="code.saved">Я сохранил код</span></label>
+        <button class="primary" id="code-continue" disabled data-i18n="code.continue">Дальше</button>
       </div>
     </section>
 
     <!-- Onboarding questions -->
     <section id="screen-onboarding" hidden>
-      <h1>Пара вопросов о тебе</h1>
+      <h1 data-i18n="ob.title">Пара вопросов о тебе</h1>
       <form id="profile-form" class="card">
         <fieldset>
-          <legend>Сколько тебе лет?</legend>
+          <legend data-i18n="ob.age">Сколько тебе лет?</legend>
           <div class="chips" data-name="ageGroup" data-type="radio"></div>
         </fieldset>
         <fieldset>
-          <legend>Что ты любишь смотреть?</legend>
+          <legend data-i18n="ob.likes">Что ты любишь смотреть?</legend>
           <div class="chips" data-name="favoriteGenres" data-type="checkbox"></div>
         </fieldset>
         <fieldset>
-          <legend>Что точно <b>не</b> показывать?</legend>
+          <legend data-i18n="ob.dislikes">Что точно НЕ показывать?</legend>
           <div class="chips" data-name="dislikedGenres" data-type="checkbox"></div>
         </fieldset>
         <fieldset>
-          <legend>Обычно хочется чего-то…</legend>
+          <legend data-i18n="ob.vibe">Обычно хочется чего-то…</legend>
           <div class="chips" data-name="vibe" data-type="radio"></div>
         </fieldset>
         <fieldset>
-          <legend>Какие сервисы у тебя есть? <span class="muted">Отметь только свои.</span></legend>
+          <legend><span data-i18n="ob.services">Какие сервисы у тебя есть?</span> <span class="muted" data-i18n="ob.servicesHint">Отметь только свои.</span></legend>
           <div class="chips" data-name="services" data-type="checkbox"></div>
         </fieldset>
-        <button type="submit" class="primary">Готово</button>
+        <button type="submit" class="primary" data-i18n="ob.done">Готово</button>
         <p class="error" id="profile-error"></p>
       </form>
     </section>
 
     <!-- Picker + result -->
     <section id="screen-picker" hidden>
-      <h1>Что сегодня вечером?</h1>
+      <div id="feedback" class="card feedback" hidden>
+        <p id="feedback-question"></p>
+        <div class="actions">
+          <button class="secondary" data-rating="1" data-i18n="fb.up">👍 Понравилось</button>
+          <button class="secondary" data-rating="-1" data-i18n="fb.down">👎 Не очень</button>
+          <button class="link" data-rating="0" data-i18n="fb.no">Не смотрел</button>
+        </div>
+      </div>
+
+      <h1 data-i18n="pick.title">Что сегодня вечером?</h1>
+      <button class="surprise" id="surprise" data-i18n-title="pick.surpriseHint" title="">
+        <span data-i18n="pick.surprise">🎲 Удиви меня</span>
+      </button>
       <form id="pick-form" class="card answers">
         <fieldset>
-          <legend>Настроение</legend>
+          <legend data-i18n="pick.mood">Настроение</legend>
           <div class="chips" data-name="mood" data-type="radio"></div>
         </fieldset>
         <fieldset>
-          <legend>Сколько есть времени</legend>
+          <legend data-i18n="pick.time">Сколько есть времени</legend>
           <div class="chips" data-name="duration" data-type="radio"></div>
         </fieldset>
         <fieldset>
-          <legend>Фильм или сериал</legend>
+          <legend data-i18n="pick.kind">Фильм или сериал</legend>
           <div class="chips" data-name="kind" data-type="radio"></div>
         </fieldset>
         <fieldset>
-          <legend>Мои сервисы</legend>
+          <legend data-i18n="pick.services">Мои сервисы</legend>
           <div class="chips" data-name="services" data-type="checkbox"></div>
         </fieldset>
-        <button type="submit" class="primary">Подобрать</button>
+        <button type="submit" class="primary" data-i18n="pick.go">Подобрать</button>
         <p class="error" id="pick-error"></p>
       </form>
       <div id="result"></div>
@@ -119,83 +160,90 @@
 
     <!-- My list -->
     <section id="screen-list" hidden>
-      <h1>Мой список</h1>
+      <h1 data-i18n="list.title">Мой список</h1>
       <div class="tabs" id="list-tabs">
-        <button class="tab active" data-status="saved">⭐ Сохранённые</button>
-        <button class="tab" data-status="seen">👁 Просмотренные</button>
-        <button class="tab" data-status="skip">🙅 Скрытые</button>
+        <button class="tab active" data-status="saved" data-i18n="list.saved">⭐ Сохранённые</button>
+        <button class="tab" data-status="seen" data-i18n="list.seen">👁 Просмотренные</button>
+        <button class="tab" data-status="skip" data-i18n="list.skip">🙅 Скрытые</button>
       </div>
       <div id="list-items" class="card list"></div>
 
-      <h2 class="small-heading">Аккаунт</h2>
+      <h2 class="small-heading" data-i18n="list.account">Аккаунт</h2>
       <div class="card">
-        <p class="muted">Код восстановления нужен, если забудешь пароль. Создай новый, если старый потерялся — старый перестанет работать.</p>
-        <button class="secondary" id="new-code">Создать новый код</button>
+        <p class="muted" data-i18n="list.codeText">Код восстановления нужен, если забудешь пароль.</p>
+        <button class="secondary" id="new-code" data-i18n="list.newCode">Создать новый код</button>
       </div>
     </section>
 
     <!-- Movie night with friends -->
     <section id="screen-room" hidden>
       <div id="room-start">
-        <h1>Вечер с друзьями</h1>
-        <p class="muted">Создай комнату и отправь ссылку друзьям. Каждый отметит настроение и свои сервисы — и вы получите один фильм на всех.</p>
+        <h1 data-i18n="room.title">Вечер с друзьями</h1>
+        <p class="muted" data-i18n="room.text">Создай комнату и отправь ссылку друзьям.</p>
         <div class="card">
-          <button class="primary" id="room-create">Создать комнату</button>
-          <p class="muted or">или войди по коду</p>
+          <button class="primary" id="room-create" data-i18n="room.create">Создать комнату</button>
+          <p class="muted or" data-i18n="room.or">или войди по коду</p>
           <form id="room-join-form" class="inline-form">
-            <input type="text" name="code" maxlength="6" placeholder="Код комнаты" autocomplete="off" required>
-            <button type="submit" class="secondary">Войти</button>
+            <input type="text" name="code" maxlength="6" data-i18n-placeholder="room.codePh" placeholder="Код комнаты" autocomplete="off" required>
+            <button type="submit" class="secondary" data-i18n="room.join">Войти</button>
           </form>
           <p class="error" id="room-start-error"></p>
         </div>
       </div>
 
       <div id="room-view" hidden>
-        <h1>Комната <span id="room-code" class="code-badge"></span></h1>
+        <h1><span data-i18n="room.room">Комната</span> <span id="room-code" class="code-badge"></span></h1>
         <div class="card">
-          <p class="muted">Отправь эту ссылку друзьям:</p>
+          <p class="muted" data-i18n="room.shareText">Отправь эту ссылку друзьям:</p>
           <div class="inline-form">
             <input type="text" id="room-link" readonly>
-            <button class="secondary" id="room-share">Поделиться</button>
+            <button class="secondary" id="room-share" data-i18n="room.shareBtn">Поделиться</button>
           </div>
           <ul id="room-members" class="members"></ul>
         </div>
 
         <form id="room-form" class="card answers">
           <fieldset>
-            <legend>Твоё настроение</legend>
+            <legend data-i18n="room.yourMood">Твоё настроение</legend>
             <div class="chips" data-name="mood" data-type="radio"></div>
           </fieldset>
           <fieldset>
-            <legend>Сколько есть времени</legend>
+            <legend data-i18n="pick.time">Сколько есть времени</legend>
             <div class="chips" data-name="duration" data-type="radio"></div>
           </fieldset>
           <fieldset>
-            <legend>Фильм или сериал</legend>
+            <legend data-i18n="pick.kind">Фильм или сериал</legend>
             <div class="chips" data-name="kind" data-type="radio"></div>
           </fieldset>
           <fieldset>
-            <legend>Твои сервисы</legend>
+            <legend data-i18n="room.yourServices">Твои сервисы</legend>
             <div class="chips" data-name="services" data-type="checkbox"></div>
           </fieldset>
-          <button type="submit" class="primary" id="room-ready">Я готов</button>
+          <button type="submit" class="primary" id="room-ready" data-i18n="room.ready">Я готов</button>
           <p class="error" id="room-error"></p>
         </form>
 
         <div id="room-owner" class="card" hidden>
           <p class="muted" id="room-owner-hint"></p>
-          <button class="primary" id="room-pick">🎬 Подобрать для всех</button>
+          <button class="primary" id="room-pick" data-i18n="room.pick">🎬 Подобрать 3 варианта</button>
         </div>
-        <p class="muted" id="room-wait" hidden>Ждём, пока организатор нажмёт «Подобрать для всех»…</p>
+        <p class="muted" id="room-wait" hidden data-i18n="room.wait">Ждём, пока организатор нажмёт «Подобрать»…</p>
         <div id="room-result"></div>
       </div>
+    </section>
+
+    <!-- Stats (admin only) -->
+    <section id="screen-stats" hidden>
+      <h1 data-i18n="stats.title">Статистика</h1>
+      <div id="stats-body"></div>
     </section>
   </main>
 
   <footer class="footer">
-    <p>Данные о фильмах — <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>, где посмотреть — <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a>. Этот сайт использует TMDB API, но не одобрен и не сертифицирован TMDB.</p>
+    <p data-i18n-html="footer">Данные о фильмах — <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>, где посмотреть — <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a>. Этот сайт использует TMDB API, но не одобрен и не сертифицирован TMDB.</p>
   </footer>
 
+  <script src="/i18n.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

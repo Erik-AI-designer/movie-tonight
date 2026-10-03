@@ -6,10 +6,11 @@ disliked genres, and which services you have. Money comes from affiliate links o
 
 Runs on **Cloudflare Workers** (free plan) with a **D1** database for accounts.
 
-**Features:** one pick by mood/time/services · movie, series or either · "seen it" / "not for me" /
-⭐ "my list" (never suggests seen or hidden titles again) · trailer button · posters, descriptions,
-ratings and "where to watch in Estonia" from TMDB · movie night with friends (shared room link) ·
-installable on phones (PWA) · login rate limiting · password reset with a recovery code.
+**Features:** picks from everything available right now in Estonia (TMDB) plus a hand-made catalogue for
+Russian-language services · movie, series or either · 🎲 surprise me · "seen it" / "not for me" / ⭐ "my list" ·
+👍/👎 after watching (the picks learn from it) · posters, logos, facts and official trailers from TMDB ·
+movie night with friends (3 options + voting) · share a picture of the pick · RU / EE / EN · light & dark theme ·
+📊 click stats for the admin · installable on phones (PWA) · login rate limiting · recovery codes.
 
 ## Files
 
@@ -21,13 +22,16 @@ movie-tonight/
 │   ├── index.js        all /api/... routes
 │   ├── auth.js         passwords, sessions, rate limiting, recovery codes
 │   ├── profile.js      the onboarding questions
-│   ├── recommend.js    picks one title (for one person or a group) and explains why
-│   ├── lists.js        seen / not for me / my list
+│   ├── recommend.js    picks titles (one person or a group), combines TMDB + catalogue, explains why
+│   ├── discover.js     finds titles on TMDB that are on your services in Estonia
+│   ├── i18n.js         server texts in RU / ET / EN
+│   ├── lists.js        seen / not for me / my list, 👍/👎, click stats
 │   ├── tmdb.js         posters, descriptions, trailers, Estonian availability (cached a week)
-│   ├── rooms.js        movie night with friends
+│   ├── rooms.js        movie night with friends (3 options + voting)
 │   └── movies.js       THE CATALOGUE: movies, series, moods, genres, services
 └── public/             frontend: what the browser loads
     ├── index.html      all screens
+    ├── i18n.js         page texts in RU / ET / EN
     ├── app.js          page logic
     ├── style.css       look (incl. the card flip animation)
     ├── manifest.webmanifest, sw.js, icon*.png, icon.svg   phone app (PWA)
@@ -45,6 +49,8 @@ movie-tonight/
 6. **TMDB (posters etc.):** get an "API Read Access Token" at themoviedb.org → Settings → API.
    In Cloudflare: Workers → movie-tonight → Settings → Variables and Secrets → Add →
    type **Secret**, name `TMDB_TOKEN`, paste the token. Without it the site still works, just without posters.
+7. **Stats page:** add another **Secret** named `ADMIN_EMAIL` = the email you log in to the site with.
+   That account gets a 📊 button. (Kept as a secret so your email isn't in the public repo.)
 
 After that, every `git push` to `main` redeploys automatically.
 

@@ -20,4 +20,7 @@
   "vars": {
     "AMAZON_TAG": ""
   }
+  // Secrets (set in Cloudflare → Settings → Variables and Secrets, never in this file):
+  //   TMDB_TOKEN  — TMDB "API Read Access Token"
+  //   ADMIN_EMAIL — the email you log in to the site with; it can open the 📊 stats page
 }
