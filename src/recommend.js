@@ -123,6 +123,17 @@ export function criteriaFor(profile, answers, marks, taste, lang, extraExclude =
   };
 }
 
+// Trial pick without an account: we don't know the age, so we play it safe (12+ at most).
+export function trialCriteria(answers, lang) {
+  return criteriaFor(
+    { ageGroup: "13-15", favoriteGenres: [], dislikedGenres: [], vibe: "both" },
+    answers,
+    { seen: new Set(), skip: new Set(), saved: new Set(), watching: new Set() },
+    {},
+    lang,
+  );
+}
+
 // Criteria for a group: everyone's services count (you watch together), the youngest age wins,
 // anyone's dislikes are avoided, the most popular mood and the shortest time are used.
 export function groupCriteria(members, lang) {

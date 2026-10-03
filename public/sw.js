@@ -1,7 +1,7 @@
 // Service worker: makes the site installable as an app and opens instantly.
 // Pages/CSS/JS: try the network first (so updates show up), fall back to the saved copy offline.
 // /api/ requests are never cached — they always need fresh data.
-const CACHE = "movie-tonight-v2";
+const CACHE = "movie-tonight-v3";
 const SHELL = ["/", "/style.css", "/i18n.js", "/app.js", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

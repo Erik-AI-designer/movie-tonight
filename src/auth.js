@@ -11,6 +11,7 @@ const LIMITS = {
   "login-ip": [20, 15 * 60_000], // wrong passwords from one network
   "reset-ip": [10, 15 * 60_000], // wrong recovery codes from one network
   "reg-ip": [10, 60 * 60_000], // new accounts from one network
+  "try-ip": [10, 60 * 60_000], // trial picks (without an account) from one network
 };
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I mix-ups
 
@@ -125,7 +126,8 @@ export async function newRecoveryCode(env, userId) {
   return raw.match(/..../g).join("-");
 }
 
-export async function register(env, rawEmail, rawPassword, ip) {
+export async function register(env, rawEmail, rawPassword, ip, consent) {
+  if (consent !== true) throw new HttpError(400, "err.consent");
   await guard(env, [["reg-ip", ip]]);
   const { email, password } = checkCredentials(rawEmail, rawPassword);
   const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
@@ -185,6 +187,19 @@ export async function resetPassword(env, rawEmail, rawCode, rawPassword, ip) {
   await env.DB.prepare("DELETE FROM attempts WHERE key = ?").bind(`login-email:${email}`).run();
   // The old code is used up — give a fresh one.
   return { cookie: await startSession(env, row.id), recoveryCode: await newRecoveryCode(env, row.id) };
+}
+
+// Asks for the password again before dangerous actions (deleting the account).
+export async function checkPassword(env, userId, rawPassword) {
+  const user = await env.DB.prepare("SELECT pass_hash, salt FROM users WHERE id = ?").bind(userId).first();
+  const hash = await hashPassword(String(rawPassword || ""), user.salt);
+  if (!sameHash(hash, user.pass_hash)) throw new HttpError(401, "err.badPassword");
+}
+
+// Generic rate limit for other routes (e.g. the trial pick): `kind` must be in LIMITS.
+export async function limit(env, kind, value) {
+  await guard(env, [[kind, value]]);
+  await recordAttempt(env, kind, value);
 }
 
 export async function logout(env, request) {

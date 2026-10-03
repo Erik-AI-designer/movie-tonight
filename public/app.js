@@ -97,6 +97,8 @@ let screen = null;
 let shown = []; // ids already suggested in this picker session
 let lastResult = null;
 let pendingRoom = null; // room code from a shared link, opened after login
+let pendingFriend = null; // friend code from a shared link, added after login
+let previousScreen = null; // where "←" on the privacy page goes back to
 let room = { code: null, timer: null, renderKey: null, shown: [], state: null };
 
 // ---------- Helpers ----------
@@ -126,10 +128,12 @@ function el(tag, props = {}, ...children) {
 function show(name) {
   screen = name;
   $("#loading").hidden = true;
-  for (const id of ["auth", "code", "onboarding", "picker", "list", "room", "stats"]) {
+  if (name !== screen && name === "privacy") previousScreen = screen;
+  for (const id of ["auth", "code", "onboarding", "picker", "list", "room", "stats", "friends", "privacy"]) {
     $(`#screen-${id}`).hidden = id !== name;
   }
   const loggedIn = Boolean(me?.profile) && !["auth", "code"].includes(name);
+  updateBadge();
   $("#nav").hidden = !loggedIn;
   $("#nav-stats").hidden = !me?.isAdmin;
   $("#account-actions").hidden = !me;
@@ -313,6 +317,7 @@ function resultCard(m, actions = {}, { animate = true } = {}) {
   if (actions.onSeen) buttons.append(button(t("res.seen"), () => actions.onSeen(m)));
   if (actions.onSkip) buttons.append(button(t("res.skip"), () => actions.onSkip(m)));
   if (actions.onAnother) buttons.append(button(t("res.another"), () => actions.onAnother(m)));
+  if (actions.onRecommend) buttons.append(button(t("fr.recommend"), () => openRecommendPanel(m, buttons)));
   buttons.append(button(t("res.share"), (b) => shareResult(m, b)));
 
   const eyebrow = m.groupSize ? t("res.together", { n: m.groupSize }) : t(isSeries ? "res.seriesTonight" : "res.tonight");
@@ -515,6 +520,8 @@ document.querySelectorAll("#screen-auth .tab").forEach((tab) =>
     updateAuthLabels();
     form.password.autocomplete = authMode === "login" ? "current-password" : "new-password";
     $("#code-field").hidden = authMode !== "reset";
+    $("#consent-field").hidden = authMode !== "register";
+    form.consent.required = authMode === "register";
     form.code.required = authMode === "reset";
     $("#auth-error").textContent = "";
   }),
@@ -529,6 +536,7 @@ $("#auth-form").addEventListener("submit", async (e) => {
       email: form.email.value,
       password: form.password.value,
       code: form.code.value,
+      consent: form.consent.checked,
     });
     form.reset();
     if (data.recoveryCode) showRecoveryCode(data.recoveryCode);
@@ -605,6 +613,7 @@ function pickerActions(m) {
     onSeen: async () => { await api("/api/list", { movieId: m.id, status: "seen" }); await pick(false); },
     onSkip: async () => { await api("/api/list", { movieId: m.id, status: "skip" }); await pick(false); },
     onAnother: () => pick(false),
+    onRecommend: true,
   };
 }
 
@@ -673,6 +682,7 @@ let listData = null;
 
 async function openList() {
   show("list");
+  loadRecap();
   $("#list-items").replaceChildren(el("p", { className: "muted", textContent: t("list.loading") }));
   try {
     listData = await api("/api/list");
@@ -806,7 +816,7 @@ function renderRoom(state, force = false) {
     return;
   }
   if (!room.shown.includes(r.movie.id)) room.shown.push(r.movie.id);
-  const card = resultCard({ ...r.movie, groupSize: r.groupSize }, { onSave: toggleSaved }, { animate: firstFinal || force === "animate" });
+  const card = resultCard({ ...r.movie, groupSize: r.groupSize }, { onSave: toggleSaved, onRecommend: true }, { animate: firstFinal || force === "animate" });
   const top = r.counts?.length ? Math.max(...r.counts) : 0;
   const parts = [top ? el("p", { className: "muted", textContent: t("room.winner", { n: top }) }) : null, card].filter(Boolean);
   $("#room-result").replaceChildren(...parts);
@@ -945,12 +955,389 @@ function renderStats() {
   );
 }
 
+// ---------- 7. Trial pick without an account ----------
+function renderTrialForm(values = {}) {
+  const form = $("#trial-form");
+  renderChips(form.querySelector('[data-name="mood"]'), opts("mood", "mood"), values.mood ? [values.mood] : []);
+  renderServiceGroups(form.querySelector('[data-name="services"]'), values.services || []);
+}
+
+$("#trial-open").addEventListener("click", () => {
+  $("#trial-open").hidden = true;
+  $("#trial").hidden = false;
+  renderTrialForm();
+  $("#trial").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+$("#trial-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#trial-error").textContent = "";
+  try {
+    const m = await api("/api/try", { ...readForm(e.target), duration: "long", kind: "any" });
+    showResult($("#trial-result"), resultCard(m, {}));
+    $("#trial-form").hidden = true;
+  } catch (err) {
+    $("#trial-error").textContent = err.message;
+  }
+  $("#trial-cta").hidden = false;
+});
+
+$("#trial-signup").addEventListener("click", () => {
+  document.querySelector('#screen-auth .tab[data-mode="register"]').click();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  $("#auth-form").email.focus();
+});
+
+// ---------- 8. 🤝 Friends ----------
+let friendsData = null;
+let friendToast = null; // set after adding a friend from a shared link
+
+function updateBadge() {
+  const n = me?.newRecommendations || 0;
+  $("#friends-badge").hidden = !n;
+  $("#friends-badge").textContent = n;
+}
+
+function friendLink(code) {
+  return `${location.origin}/?friend=${code}`;
+}
+
+async function openFriends() {
+  show("friends");
+  $("#friend-recs").replaceChildren(el("p", { className: "muted", textContent: t("loading") }));
+  try {
+    friendsData = await api("/api/friends");
+    if (me) me.newRecommendations = friendsData.recommendations.length;
+    updateBadge();
+    renderFriends();
+  } catch (err) {
+    $("#friend-recs").replaceChildren(el("p", { className: "error", textContent: err.message }));
+  }
+}
+
+function thumb(m) {
+  return m.poster
+    ? el("img", { className: "thumb", src: m.poster, alt: "", loading: "lazy" })
+    : el("div", { className: "thumb placeholder", textContent: m.type === "series" ? "📺" : "🎬" });
+}
+
+function renderFriends() {
+  const d = friendsData;
+  if (!d) return;
+  $("#my-friend-code").textContent = d.me.code;
+  const nick = $("#nickname-form").nickname;
+  if (document.activeElement !== nick) nick.value = d.me.nickname || "";
+
+  if (friendToast) {
+    $("#add-friend-msg").className = friendToast.error ? "error" : "success";
+    $("#add-friend-msg").textContent = friendToast.error || t("fr.added");
+    friendToast = null;
+  }
+
+  $("#friend-recs").replaceChildren(...(d.recommendations.length
+    ? d.recommendations.map((r) => {
+        const dismiss = async () => {
+          await api("/api/friends/dismiss", { id: r.id });
+          await openFriends();
+        };
+        return el("div", { className: "list-item" },
+          thumb(r.movie),
+          el("div", {},
+            el("p", { className: "muted small", textContent: t("fr.recFrom", { name: r.from || t("fr.noName") }) }),
+            el("p", { className: "list-title", textContent: r.movie.title }),
+            el("p", { className: "muted small", textContent: [r.movie.year, (r.movie.genres || []).join(", ")].filter(Boolean).join(" · ") }),
+            el("div", { className: "actions" },
+              button(t("res.save"), async () => {
+                await api("/api/list", { movieId: r.movie.id, status: "saved" });
+                await dismiss();
+              }),
+              button(t("fr.dismiss"), dismiss),
+            ),
+          ),
+        );
+      })
+    : [el("p", { className: "muted", textContent: t("fr.noRecs") })]));
+
+  $("#friend-list").replaceChildren(...(d.friends.length
+    ? d.friends.map((f) => {
+        const name = f.nickname || t("fr.noName");
+        return el("div", { className: "card friend" },
+          el("div", { className: "friend-head" },
+            el("p", { className: "list-title", textContent: name }),
+            button(t("fr.remove"), async () => {
+              if (!confirm(t("fr.removeConfirm", { name }))) return;
+              await api("/api/friends/remove", { code: f.code });
+              await openFriends();
+            }, "link"),
+          ),
+          el("p", { className: "muted small", textContent: t("fr.likes") }),
+          f.likes.length
+            ? el("div", { className: "likes" }, ...f.likes.map((m) =>
+                el("div", { className: "like", title: m.title }, thumb(m), el("span", { className: "small", textContent: m.title }))))
+            : el("p", { className: "muted small", textContent: t("fr.noLikes") }),
+        );
+      })
+    : [el("p", { className: "muted card", textContent: t("fr.noFriends") })]));
+}
+
+$("#nickname-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#nickname-error").textContent = "";
+  try {
+    await api("/api/friends/nickname", { nickname: e.target.nickname.value });
+    friendsData.me.nickname = e.target.nickname.value.trim();
+    e.target.querySelector("button").textContent = t("fr.saved");
+    setTimeout(() => { e.target.querySelector("button").textContent = t("fr.save"); }, 2000);
+  } catch (err) {
+    $("#nickname-error").textContent = err.message;
+  }
+});
+
+$("#share-friend-code").addEventListener("click", async (e) => {
+  const link = friendLink(friendsData.me.code);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: t("app.name"), text: t("fr.shareMsg"), url: link });
+      return;
+    } catch {
+      // Cancelled — fall back to copying.
+    }
+  }
+  e.target.textContent = t((await copyText(`${t("fr.shareMsg")} ${link}`)) ? "fr.copied" : "room.copyManually");
+});
+
+$("#add-friend-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#add-friend-msg");
+  msg.className = "error";
+  msg.textContent = "";
+  try {
+    await api("/api/friends/add", { code: e.target.code.value });
+    e.target.reset();
+    friendToast = "ok";
+    await openFriends();
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
+// "🤝 Recommend" on a result card: pick a friend and send.
+async function openRecommendPanel(m, buttons) {
+  const old = buttons.parentElement.querySelector(".recommend-panel");
+  if (old) return old.remove();
+  const panel = el("div", { className: "recommend-panel" }, el("p", { className: "muted small", textContent: t("loading") }));
+  buttons.after(panel);
+  try {
+    const { friends } = await api("/api/friends/names");
+    if (!friends.length) return panel.replaceChildren(el("p", { className: "muted small", textContent: t("fr.needFriends") }));
+    const select = el("select", {}, ...friends.map((f) => el("option", { value: f.code, textContent: f.nickname || t("fr.noName") })));
+    const status = el("span", { className: "muted small" });
+    panel.replaceChildren(
+      el("label", { className: "small" }, t("fr.recommendTo"), select),
+      button(t("fr.send"), async () => {
+        status.textContent = "";
+        try {
+          await api("/api/friends/recommend", { code: select.value, movieId: m.id });
+          status.textContent = t("fr.sent");
+        } catch (err) {
+          status.textContent = err.message;
+        }
+      }, "primary"),
+      status,
+    );
+  } catch (err) {
+    panel.replaceChildren(el("p", { className: "error", textContent: err.message }));
+  }
+}
+
+// ---------- 9. 📅 Monthly recap ----------
+let recapMonth = null; // "2026-10"
+let recapData = null;
+
+function monthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+function shiftMonth(key, delta) {
+  const [y, mo] = key.split("-").map(Number);
+  return monthKey(new Date(y, mo - 1 + delta, 1));
+}
+function monthName(key, withYear = true) {
+  const [y, mo] = key.split("-").map(Number);
+  const locale = lang === "et" ? "et-EE" : lang === "en" ? "en-GB" : "ru-RU";
+  return new Date(y, mo - 1, 1).toLocaleDateString(locale, withYear ? { month: "long", year: "numeric" } : { month: "long" });
+}
+
+async function loadRecap() {
+  recapMonth = recapMonth || monthKey(new Date());
+  $("#recap-body").replaceChildren(el("p", { className: "muted small", textContent: t("loading") }));
+  try {
+    recapData = await api(`/api/recap?month=${recapMonth}`);
+    renderRecap();
+  } catch (err) {
+    $("#recap-body").replaceChildren(el("p", { className: "error", textContent: err.message }));
+  }
+}
+
+function renderRecap() {
+  const r = recapData;
+  if (!r) return;
+  $("#recap-next").disabled = r.month >= monthKey(new Date());
+  const head = el("p", { className: "recap-month", textContent: monthName(r.month) });
+  if (!r.watched) {
+    return $("#recap-body").replaceChildren(head, el("p", { className: "muted", textContent: t("recap.empty") }));
+  }
+  const stat = (value, label) => el("div", { className: "tile" }, el("p", { className: "tile-value", textContent: value }), el("p", { className: "muted small", textContent: label }));
+  $("#recap-body").replaceChildren(
+    head,
+    el("div", { className: "tiles" },
+      stat(r.watched, t("recap.watched")),
+      r.minutes ? stat(Math.round(r.minutes / 60), t("recap.hours")) : null,
+      stat(r.liked, t("recap.liked")),
+    ),
+    r.topGenre ? el("p", { textContent: t("recap.topGenre", { genre: t(`genre.${r.topGenre}`) }) }) : null,
+    r.topService ? el("p", { textContent: t("recap.topService", { service: r.topService }) }) : null,
+    el("div", { className: "likes" }, ...r.titles.map((m) =>
+      el("div", { className: "like", title: m.title }, thumb(m), el("span", { className: "small", textContent: `${m.rating === 1 ? "👍 " : m.rating === -1 ? "👎 " : ""}${m.title}` })))),
+    button(t("recap.share"), (b) => shareRecap(r, b)),
+  );
+}
+
+$("#recap-prev").addEventListener("click", () => { recapMonth = shiftMonth(recapMonth, -1); loadRecap(); });
+$("#recap-next").addEventListener("click", () => { recapMonth = shiftMonth(recapMonth, 1); loadRecap(); });
+
+// A 1080×1350 recap picture: headline, big numbers, favourite genre, up to 6 posters.
+async function recapImage(r) {
+  const W = 1080, H = 1350;
+  const canvas = el("canvas", { width: W, height: H });
+  const ctx = canvas.getContext("2d");
+  const posters = await Promise.all(r.titles.map((m) => (m.poster ? loadImage(m.poster).catch(() => null) : null)));
+  const draw = (withPosters) => {
+    ctx.fillStyle = "#12111a";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffb347";
+    ctx.font = "600 40px system-ui, sans-serif";
+    ctx.fillText(t("recap.headline", { month: monthName(r.month, false) }).toUpperCase(), W / 2, 110);
+    ctx.fillStyle = "#f1eff8";
+    ctx.font = "800 220px system-ui, sans-serif";
+    ctx.fillText(String(r.watched), W / 2, 330);
+    ctx.font = "44px system-ui, sans-serif";
+    ctx.fillStyle = "#a19db5";
+    ctx.fillText(t("recap.watched"), W / 2, 395);
+    const line = [r.minutes ? `≈ ${Math.round(r.minutes / 60)} h` : null, `👍 ${r.liked}`, r.topGenre ? t(`genre.${r.topGenre}`) : null].filter(Boolean).join("   ·   ");
+    ctx.fillStyle = "#f1eff8";
+    ctx.font = "600 46px system-ui, sans-serif";
+    ctx.fillText(line, W / 2, 480);
+    const pw = 280, ph = 420, gap = 30, top = 560;
+    const shown = r.titles.slice(0, 6);
+    const cols = Math.min(3, shown.length);
+    const startX = (W - (cols * pw + (cols - 1) * gap)) / 2;
+    shown.slice(0, 3).forEach((m, i) => {
+      const x = startX + i * (pw + gap);
+      if (withPosters && posters[i]) ctx.drawImage(posters[i], x, top, pw, ph);
+      else {
+        ctx.fillStyle = "#2e2c3d";
+        ctx.fillRect(x, top, pw, ph);
+        ctx.fillStyle = "#f1eff8";
+        ctx.font = "600 34px system-ui, sans-serif";
+        wrapLines(ctx, m.title, pw - 30, 4).forEach((l, j) => ctx.fillText(l, x + pw / 2, top + 170 + j * 44));
+      }
+    });
+    ctx.fillStyle = "#ffb347";
+    ctx.font = "600 38px system-ui, sans-serif";
+    ctx.fillText(`🍿 ${t("app.name")} · ${location.host}`, W / 2, H - 70);
+  };
+  const toBlob = () => new Promise((resolve, reject) => {
+    try {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no blob"))), "image/png");
+    } catch (e) {
+      reject(e);
+    }
+  });
+  draw(true);
+  try {
+    return await toBlob();
+  } catch {
+    draw(false); // posters couldn't be used — share without them
+    return toBlob();
+  }
+}
+
+async function shareRecap(r, b) {
+  const text = `${t("recap.headline", { month: monthName(r.month, false) })}: ${r.watched} 🍿`;
+  try {
+    const blob = await recapImage(r);
+    const file = new File([blob], "movie-recap.png", { type: "image/png" });
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], text: `${text} ${location.origin}` });
+      return;
+    }
+    // No share sheet (e.g. a computer): download the picture instead.
+    const a = el("a", { href: URL.createObjectURL(blob), download: "movie-recap.png" });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (err) {
+    if (err?.name === "AbortError") return;
+    if (await copyText(`${text} ${location.origin}`)) b.textContent = t("res.shared");
+  }
+}
+
+// ---------- 10. Delete account ----------
+$("#delete-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#delete-error").textContent = "";
+  if (!confirm(t("acc.deleteConfirm"))) return;
+  try {
+    await api("/api/account/delete", { password: e.target.password.value });
+    me = null;
+    alert(t("acc.deleted"));
+    location.href = "/";
+  } catch (err) {
+    $("#delete-error").textContent = err.message;
+  }
+});
+
+// ---------- 11. 🔒 Privacy page ----------
+let contactEmail; // undefined = not loaded yet
+
+async function openPrivacy() {
+  show("privacy");
+  if (contactEmail === undefined) {
+    contactEmail = await api("/api/config").then((c) => c.contact).catch(() => null);
+  }
+  renderPrivacyContact();
+}
+
+function renderPrivacyContact() {
+  const p = $("#privacy-contact");
+  if (!contactEmail) return (p.textContent = t("pv.noContact"));
+  const [before, after] = t("pv.contact").split("{email}");
+  p.replaceChildren(before, el("a", { href: `mailto:${contactEmail}`, textContent: contactEmail }), after || "");
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".open-privacy")) {
+    e.preventDefault();
+    openPrivacy();
+  }
+});
+
+$("#privacy-back").addEventListener("click", () => {
+  const back = previousScreen;
+  if (!me) return show("auth");
+  if (back === "list") return openList();
+  if (back === "friends") return openFriends();
+  if (back === "room" && room.code) return openRoom(room.code);
+  openPicker();
+});
+
 // ---------- Navigation ----------
 document.querySelectorAll("[data-go]").forEach((b) =>
   b.addEventListener("click", () => {
     if (b.dataset.go === "list") openList();
     if (b.dataset.go === "room") room.code ? openRoom(room.code) : openRoomStart();
     if (b.dataset.go === "stats") openStats();
+    if (b.dataset.go === "friends") openFriends();
   }),
 );
 
@@ -969,12 +1356,18 @@ function rerender() {
     if (lastResult) $("#result").replaceChildren(resultCard(lastResult, pickerActions(lastResult), { animate: false }));
     loadFeedback();
   }
-  if (screen === "list") openList();
+  if (screen === "list") {
+    renderList();
+    renderRecap();
+  }
   if (screen === "room" && room.state) {
     renderAnswers($("#room-form"), readForm($("#room-form")));
     renderRoom(room.state, true);
   }
   if (screen === "stats") renderStats();
+  if (screen === "friends") renderFriends();
+  if (screen === "privacy") renderPrivacyContact();
+  if (!$("#trial").hidden) renderTrialForm(readForm($("#trial-form")));
 }
 
 // ---------- Start ----------
@@ -985,11 +1378,24 @@ async function start() {
     me = null;
     return show("auth");
   }
+  if (pendingFriend) {
+    const code = pendingFriend;
+    pendingFriend = null;
+    try {
+      await api("/api/friends/add", { code });
+      friendToast = code;
+    } catch (err) {
+      friendToast = { error: err.message };
+    }
+  }
   if (!me.profile) return openOnboarding();
   if (pendingRoom) return openRoom(pendingRoom);
+  if (friendToast) return openFriends();
   openPicker();
 }
 
+const friendParam = new URLSearchParams(location.search).get("friend");
+if (friendParam && /^[A-Za-z0-9-]{8,9}$/.test(friendParam)) pendingFriend = friendParam;
 const roomParam = new URLSearchParams(location.search).get("room");
 if (roomParam && /^[A-Za-z0-9]{6}$/.test(roomParam)) pendingRoom = roomParam.toUpperCase();
 

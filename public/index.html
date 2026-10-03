@@ -24,7 +24,8 @@
     <nav>
       <span id="nav" hidden>
         <button class="link" data-go="list" data-i18n="nav.list">⭐ Мой список</button>
-        <button class="link" data-go="room" data-i18n="nav.room">👥 С друзьями</button>
+        <button class="link" data-go="friends"><span data-i18n="nav.friends">🤝 Друзья</span><span class="badge" id="friends-badge" hidden></span></button>
+        <button class="link" data-go="room" data-i18n="nav.room">🎬 Вечер вместе</button>
         <button class="link" data-go="stats" id="nav-stats" data-i18n="nav.stats" hidden>📊 Статистика</button>
       </span>
       <details class="settings" id="settings">
@@ -74,9 +75,36 @@
         <label><span id="password-label" data-i18n="auth.password">Пароль</span>
           <input type="password" name="password" minlength="8" autocomplete="current-password" required>
         </label>
+        <label class="check consent" id="consent-field" hidden>
+          <input type="checkbox" name="consent">
+          <span><span data-i18n="auth.consentA">Я согласен с </span><a href="#" class="open-privacy" data-i18n="auth.consentLink">политикой конфиденциальности</a><span data-i18n="auth.consentB">. Мне есть 13 лет (или родители разрешили).</span></span>
+        </label>
         <button type="submit" class="primary" id="auth-submit" data-i18n="auth.doLogin">Войти</button>
         <p class="error" id="auth-error"></p>
       </form>
+
+      <button class="surprise trial-open" id="trial-open" data-i18n="trial.button">🎲 Попробовать без регистрации</button>
+      <div id="trial" hidden>
+        <form id="trial-form" class="card answers">
+          <h2 class="small-heading" data-i18n="trial.title">Один пробный подбор</h2>
+          <p class="muted" data-i18n="trial.text">Выбери настроение и свои сервисы — без регистрации, один раз.</p>
+          <fieldset>
+            <legend data-i18n="pick.mood">Настроение</legend>
+            <div class="chips" data-name="mood" data-type="radio"></div>
+          </fieldset>
+          <fieldset>
+            <legend data-i18n="pick.services">Мои сервисы</legend>
+            <div class="chips" data-name="services" data-type="checkbox"></div>
+          </fieldset>
+          <button type="submit" class="primary" data-i18n="trial.go">Подобрать</button>
+          <p class="error" id="trial-error"></p>
+        </form>
+        <div id="trial-result"></div>
+        <div id="trial-cta" class="card cta" hidden>
+          <p data-i18n="trial.cta">Понравилось? Зарегистрируйся.</p>
+          <button class="primary" id="trial-signup" data-i18n="trial.ctaBtn">Зарегистрироваться</button>
+        </div>
+      </div>
     </section>
 
     <!-- Recovery code, shown once after registering or resetting -->
@@ -160,6 +188,17 @@
 
     <!-- My list -->
     <section id="screen-list" hidden>
+      <div class="card recap" id="recap">
+        <div class="recap-head">
+          <h2 class="small-heading" data-i18n="recap.title">📅 Итоги месяца</h2>
+          <span class="recap-nav">
+            <button class="link" id="recap-prev" data-i18n="recap.prev">← Раньше</button>
+            <button class="link" id="recap-next" data-i18n="recap.next">Позже →</button>
+          </span>
+        </div>
+        <div id="recap-body"></div>
+      </div>
+
       <h1 data-i18n="list.title">Мой список</h1>
       <div class="tabs" id="list-tabs">
         <button class="tab active" data-status="saved" data-i18n="list.saved">⭐ Сохранённые</button>
@@ -173,6 +212,19 @@
         <p class="muted" data-i18n="list.codeText">Код восстановления нужен, если забудешь пароль.</p>
         <button class="secondary" id="new-code" data-i18n="list.newCode">Создать новый код</button>
       </div>
+      <div class="card">
+        <a class="secondary button" href="/api/export" download data-i18n="acc.export">📥 Скачать мои данные</a>
+        <button class="link open-privacy" data-i18n="footer.privacy">Конфиденциальность</button>
+      </div>
+      <form class="card danger" id="delete-form">
+        <h2 class="small-heading" data-i18n="acc.deleteTitle">Удалить аккаунт</h2>
+        <p class="muted" data-i18n="acc.deleteText">Это навсегда удалит аккаунт.</p>
+        <label><span data-i18n="auth.password">Пароль</span>
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="danger-button" data-i18n="acc.deleteBtn">Удалить навсегда</button>
+        <p class="error" id="delete-error"></p>
+      </form>
     </section>
 
     <!-- Movie night with friends -->
@@ -232,6 +284,58 @@
       </div>
     </section>
 
+    <!-- Friends -->
+    <section id="screen-friends" hidden>
+      <h1 data-i18n="fr.title">Друзья</h1>
+      <div class="card">
+        <h2 class="small-heading" data-i18n="fr.me">Ты для друзей</h2>
+        <form id="nickname-form" class="inline-form">
+          <input type="text" name="nickname" maxlength="24" data-i18n-placeholder="fr.nicknamePh" aria-label="name" required>
+          <button type="submit" class="secondary" data-i18n="fr.save">Сохранить</button>
+        </form>
+        <p class="muted small" data-i18n="fr.nickname">Имя, которое видят друзья</p>
+        <p class="muted" data-i18n="fr.myCode">Твой код друга</p>
+        <p class="friend-code" id="my-friend-code"></p>
+        <p class="muted small" data-i18n="fr.codeHint">Дай этот код другу.</p>
+        <button class="secondary" id="share-friend-code" data-i18n="fr.share">Поделиться ссылкой</button>
+        <p class="error" id="nickname-error"></p>
+      </div>
+
+      <form id="add-friend-form" class="card">
+        <h2 class="small-heading" data-i18n="fr.add">Добавить друга</h2>
+        <div class="inline-form">
+          <input type="text" name="code" maxlength="12" data-i18n-placeholder="fr.addPh" autocomplete="off" required>
+          <button type="submit" class="primary" data-i18n="fr.addBtn">Добавить</button>
+        </div>
+        <p class="error" id="add-friend-msg"></p>
+      </form>
+
+      <h2 class="small-heading" data-i18n="fr.recs">Тебе советуют</h2>
+      <div id="friend-recs" class="card list"></div>
+
+      <h2 class="small-heading" data-i18n="fr.list">Мои друзья</h2>
+      <div id="friend-list"></div>
+    </section>
+
+    <!-- Privacy -->
+    <section id="screen-privacy" hidden>
+      <h1 data-i18n="pv.title">Конфиденциальность</h1>
+      <p class="muted small" data-i18n="pv.updated"></p>
+      <div class="card privacy">
+        <p data-i18n="pv.intro"></p>
+        <h2 data-i18n="pv.h1"></h2><p data-i18n="pv.p1"></p>
+        <h2 data-i18n="pv.h2"></h2><p data-i18n="pv.p2"></p>
+        <h2 data-i18n="pv.h3"></h2><p data-i18n="pv.p3"></p>
+        <h2 data-i18n="pv.h4"></h2><p data-i18n="pv.p4"></p>
+        <h2 data-i18n="pv.h5"></h2><p data-i18n="pv.p5"></p>
+        <h2 data-i18n="pv.h6"></h2><p data-i18n="pv.p6"></p>
+        <h2 data-i18n="pv.h7"></h2><p data-i18n="pv.p7"></p>
+        <h2 data-i18n="pv.h8"></h2><p data-i18n="pv.p8"></p>
+        <h2 data-i18n="pv.h9"></h2><p id="privacy-contact"></p>
+      </div>
+      <button class="secondary" id="privacy-back">←</button>
+    </section>
+
     <!-- Stats (admin only) -->
     <section id="screen-stats" hidden>
       <h1 data-i18n="stats.title">Статистика</h1>
@@ -240,6 +344,7 @@
   </main>
 
   <footer class="footer">
+    <p><button class="link open-privacy footer-link" data-i18n="footer.privacy">Конфиденциальность</button></p>
     <p data-i18n-html="footer">Данные о фильмах — <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>, где посмотреть — <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a>. Этот сайт использует TMDB API, но не одобрен и не сертифицирован TMDB.</p>
   </footer>
 

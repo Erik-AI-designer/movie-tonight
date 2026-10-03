@@ -10,7 +10,9 @@ Runs on **Cloudflare Workers** (free plan) with a **D1** database for accounts.
 Russian-language services · movie, series or either · 🎲 surprise me · "seen it" / "not for me" / ⭐ "my list" ·
 👍/👎 after watching (the picks learn from it) · posters, logos, facts and official trailers from TMDB ·
 movie night with friends (3 options + voting) · share a picture of the pick · RU / EE / EN · light & dark theme ·
-📊 click stats for the admin · installable on phones (PWA) · login rate limiting · recovery codes.
+📊 click stats for the admin · 🤝 friends (friend codes, their 👍, recommend a movie) · 📅 monthly recap with a share
+picture · 🎲 one free pick without an account · privacy page, download my data, delete my account ·
+installable on phones (PWA) · login rate limiting · recovery codes.
 
 ## Files
 
@@ -28,6 +30,8 @@ movie-tonight/
 │   ├── lists.js        seen / not for me / my list, 👍/👎, click stats
 │   ├── tmdb.js         posters, descriptions, trailers, Estonian availability (cached a week)
 │   ├── rooms.js        movie night with friends (3 options + voting)
+│   ├── friends.js      friend codes, nicknames, friends' 👍, recommendations
+│   ├── account.js      monthly recap, download my data, delete my account
 │   └── movies.js       THE CATALOGUE: movies, series, moods, genres, services
 └── public/             frontend: what the browser loads
     ├── index.html      all screens
@@ -51,6 +55,8 @@ movie-tonight/
    type **Secret**, name `TMDB_TOKEN`, paste the token. Without it the site still works, just without posters.
 7. **Stats page:** add another **Secret** named `ADMIN_EMAIL` = the email you log in to the site with.
    That account gets a 📊 button. (Kept as a secret so your email isn't in the public repo.)
+8. **Privacy contact:** add a **Secret** named `CONTACT_EMAIL` = the email people can write to about their data.
+   It's shown on the privacy page.
 
 After that, every `git push` to `main` redeploys automatically.
 

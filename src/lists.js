@@ -42,7 +42,7 @@ export async function setMark(env, userId, movieId, status) {
 }
 
 // Title/poster/genres for a set of ids, from the catalogue and the TMDB cache (no TMDB requests).
-async function infoFor(env, ids, lang) {
+export async function infoFor(env, ids, lang) {
   const info = {};
   const keys = new Set();
   for (const id of ids) {
@@ -76,7 +76,7 @@ async function infoFor(env, ids, lang) {
     const d = [lang, "ru", "en", "et"].map((l) => rows[`${id}:${l}`]).find(Boolean);
     if (d) {
       info[id] = {
-        id, type: d.type, title: d.title || d.original, original: d.original, year: d.year,
+        id, type: d.type, title: d.title || d.original, original: d.original, year: d.year, runtime: d.runtime,
         genreIds: d.genreIds || [], genres: (d.genreIds || []).map((g) => t(lang, `genre.${g}`)), poster: d.poster,
       };
     }
@@ -128,6 +128,7 @@ export async function recordClick(env, userId, movieId, service, title) {
   await env.DB.prepare("INSERT INTO clicks (user_id, movie_id, title, service, at) VALUES (?, ?, ?, ?, ?)")
     .bind(userId, movieId, String(title || "").slice(0, 200), String(service || "").slice(0, 60), Date.now())
     .run();
+  if (!userId) return; // trial pick without an account: count the click, nothing to remember
   // Remember it as "watching" so we can ask for 👍/👎 later (unless it's already rated/seen).
   await env.DB.prepare(
     `INSERT INTO user_movies (user_id, movie_id, status, created_at) VALUES (?, ?, 'watching', ?)

@@ -85,3 +85,30 @@ CREATE TABLE IF NOT EXISTS clicks (
 );
 
 CREATE INDEX IF NOT EXISTS clicks_at ON clicks(at);
+
+-- Friends: each user's private friend code and the nickname friends see (never the email).
+CREATE TABLE IF NOT EXISTS friend_codes (
+  user_id  INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  code     TEXT NOT NULL UNIQUE,
+  nickname TEXT
+);
+
+-- Friendship is stored both ways (a→b and b→a).
+CREATE TABLE IF NOT EXISTS friendships (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  friend_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, friend_id)
+);
+
+-- "Посоветовать другу": a movie one friend recommends to another.
+CREATE TABLE IF NOT EXISTS recommendations (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  movie_id   TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  dismissed  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS recommendations_to ON recommendations(to_id, dismissed);
