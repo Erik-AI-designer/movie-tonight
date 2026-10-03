@@ -40,17 +40,67 @@ async function areFriends(env, a, b) {
   return Boolean(await env.DB.prepare("SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?").bind(a, b).first());
 }
 
-export async function addFriend(env, userId, rawCode) {
-  const friendId = await userByCode(env, rawCode);
-  if (friendId === userId) throw new HttpError(400, "err.friendSelf");
-  if (await areFriends(env, userId, friendId)) return;
-  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE user_id = ?").bind(userId).first();
+async function makeFriends(env, a, b) {
+  if (await areFriends(env, a, b)) return;
+  const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE user_id = ?").bind(a).first();
   if (n >= MAX_FRIENDS) throw new HttpError(409, "err.friendsFull");
   const now = Date.now();
   await env.DB.batch([
-    env.DB.prepare("INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)").bind(userId, friendId, now),
-    env.DB.prepare("INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)").bind(friendId, userId, now),
+    env.DB.prepare("INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)").bind(a, b, now),
+    env.DB.prepare("INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)").bind(b, a, now),
   ]);
+  // Any open requests between the two are now done.
+  await env.DB.prepare("DELETE FROM friend_requests WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)")
+    .bind(a, b, b, a)
+    .run()
+    .catch(() => {}); // table missing until schema.sql is re-run
+}
+
+// Adding by code = instant friendship (they chose to give you their code).
+export async function addFriend(env, userId, rawCode) {
+  const friendId = await userByCode(env, rawCode);
+  if (friendId === userId) throw new HttpError(400, "err.friendSelf");
+  await makeFriends(env, userId, friendId);
+}
+
+// A request (e.g. from a movie-night room): the other person has to accept.
+// If they already asked you, it becomes a friendship right away. Returns "sent" | "friends".
+export async function requestFriend(env, fromId, toId) {
+  if (fromId === toId) throw new HttpError(400, "err.friendSelf");
+  if (await areFriends(env, fromId, toId)) throw new HttpError(409, "err.alreadyFriends");
+  const reverse = await env.DB.prepare("SELECT id FROM friend_requests WHERE from_id = ? AND to_id = ?").bind(toId, fromId).first();
+  if (reverse) {
+    await makeFriends(env, fromId, toId);
+    return "friends";
+  }
+  await env.DB.prepare("INSERT OR IGNORE INTO friend_requests (from_id, to_id, created_at) VALUES (?, ?, ?)")
+    .bind(fromId, toId, Date.now())
+    .run();
+  return "sent";
+}
+
+export async function answerRequest(env, userId, requestId, accept) {
+  const req = await env.DB.prepare("SELECT from_id FROM friend_requests WHERE id = ? AND to_id = ?")
+    .bind(Number(requestId) || 0, userId)
+    .first();
+  if (!req) throw new HttpError(404, "err.notFound");
+  if (accept) await makeFriends(env, userId, req.from_id);
+  else await env.DB.prepare("DELETE FROM friend_requests WHERE id = ?").bind(Number(requestId)).run();
+}
+
+// For a room: which of these users are already friends with me / have a request from me.
+export async function relationTo(env, userId, otherIds) {
+  const friends = new Set(), requested = new Set();
+  if (!otherIds.length) return { friends, requested };
+  const marks = otherIds.map(() => "?").join(",");
+  const f = await env.DB.prepare(`SELECT friend_id FROM friendships WHERE user_id = ? AND friend_id IN (${marks})`).bind(userId, ...otherIds).all();
+  f.results.forEach((r) => friends.add(r.friend_id));
+  const q = await env.DB.prepare(`SELECT to_id FROM friend_requests WHERE from_id = ? AND to_id IN (${marks})`)
+    .bind(userId, ...otherIds)
+    .all()
+    .catch(() => ({ results: [] }));
+  q.results.forEach((r) => requested.add(r.to_id));
+  return { friends, requested };
 }
 
 export async function removeFriend(env, userId, rawCode) {
@@ -92,6 +142,14 @@ export async function friendsPage(env, userId, lang) {
     .bind(userId)
     .all();
 
+  const { results: requests } = await env.DB.prepare(
+    `SELECT r.id, fc.nickname FROM friend_requests r LEFT JOIN friend_codes fc ON fc.user_id = r.from_id
+     WHERE r.to_id = ? ORDER BY r.created_at DESC`,
+  )
+    .bind(userId)
+    .all()
+    .catch(() => ({ results: [] })); // table missing until schema.sql is re-run
+
   const ids = [...new Set([...Object.values(likes).flat(), ...recs.map((r) => r.movie_id)])];
   const info = await infoFor(env, ids, lang);
   return {
@@ -101,6 +159,7 @@ export async function friendsPage(env, userId, lang) {
       nickname: f.nickname,
       likes: likes[f.friend_id].map((id) => info[id]).filter(Boolean),
     })),
+    requests: requests.map((r) => ({ id: r.id, from: r.nickname })),
     recommendations: recs
       .filter((r) => info[r.movie_id])
       .map((r) => ({ id: r.id, from: r.nickname, at: r.created_at, movie: info[r.movie_id] })),
@@ -137,11 +196,15 @@ export async function dismissRecommendation(env, userId, id) {
   await env.DB.prepare("UPDATE recommendations SET dismissed = 1 WHERE id = ? AND to_id = ?").bind(Number(id) || 0, userId).run();
 }
 
-// Number of new recommendations (for the badge on the 🤝 button).
+// New recommendations + friend requests (for the badge on the 🤝 button).
 export async function newRecommendationCount(env, userId) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM recommendations WHERE to_id = ? AND dismissed = 0")
+  const recs = await env.DB.prepare("SELECT COUNT(*) AS n FROM recommendations WHERE to_id = ? AND dismissed = 0")
     .bind(userId)
     .first()
     .catch(() => ({ n: 0 })); // table missing until schema.sql is re-run
-  return row?.n || 0;
+  const reqs = await env.DB.prepare("SELECT COUNT(*) AS n FROM friend_requests WHERE to_id = ?")
+    .bind(userId)
+    .first()
+    .catch(() => ({ n: 0 }));
+  return (recs?.n || 0) + (reqs?.n || 0);
 }

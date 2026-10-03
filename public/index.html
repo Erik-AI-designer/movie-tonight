@@ -23,6 +23,7 @@
     <button class="logo link" id="home" data-i18n="app.short">🍿 Что посмотреть</button>
     <nav>
       <span id="nav" hidden>
+        <button class="link" data-go="search" data-i18n="nav.search">🔍 Поиск</button>
         <button class="link" data-go="list" data-i18n="nav.list">⭐ Мой список</button>
         <button class="link" data-go="friends"><span data-i18n="nav.friends">🤝 Друзья</span><span class="badge" id="friends-badge" hidden></span></button>
         <button class="link" data-go="room" data-i18n="nav.room">🎬 Вечер вместе</button>
@@ -199,13 +200,23 @@
         <div id="recap-body"></div>
       </div>
 
+      <div class="card taste" id="taste">
+        <h2 class="small-heading" data-i18n="taste.title">🧠 Мой вкус</h2>
+        <div id="taste-body"></div>
+      </div>
+
       <h1 data-i18n="list.title">Мой список</h1>
       <div class="tabs" id="list-tabs">
         <button class="tab active" data-status="saved" data-i18n="list.saved">⭐ Сохранённые</button>
         <button class="tab" data-status="seen" data-i18n="list.seen">👁 Просмотренные</button>
         <button class="tab" data-status="skip" data-i18n="list.skip">🙅 Скрытые</button>
       </div>
-      <div id="list-items" class="card list"></div>
+      <div class="list-toolbar">
+        <button class="link" id="list-select" data-i18n="list.select">Выбрать</button>
+        <button class="danger-link" id="list-delete-selected" hidden></button>
+        <button class="link" id="list-clear" data-i18n="list.clear">Очистить вкладку</button>
+      </div>
+      <div id="list-items" class="list-grid"></div>
 
       <h2 class="small-heading" data-i18n="list.account">Аккаунт</h2>
       <div class="card">
@@ -245,12 +256,15 @@
 
       <div id="room-view" hidden>
         <h1><span data-i18n="room.room">Комната</span> <span id="room-code" class="code-badge"></span></h1>
+        <p class="room-time" id="room-time" hidden></p>
         <div class="card">
           <p class="muted" data-i18n="room.shareText">Отправь эту ссылку друзьям:</p>
           <div class="inline-form">
             <input type="text" id="room-link" readonly>
             <button class="secondary" id="room-share" data-i18n="room.shareBtn">Поделиться</button>
+            <button class="secondary" id="room-qr-btn" data-i18n="room.qr">📱 QR-код</button>
           </div>
+          <div class="qr-box" id="room-qr" hidden><img alt="QR"></div>
           <ul id="room-members" class="members"></ul>
         </div>
 
@@ -276,11 +290,29 @@
         </form>
 
         <div id="room-owner" class="card" hidden>
+          <form id="room-time-form" class="inline-form time-form">
+            <label class="small"><span data-i18n="room.time">Во сколько смотрим?</span> <input type="time" name="time"></label>
+            <button type="submit" class="secondary" data-i18n="room.timeSave">Сохранить</button>
+          </form>
           <p class="muted" id="room-owner-hint"></p>
           <button class="primary" id="room-pick" data-i18n="room.pick">🎬 Подобрать 3 варианта</button>
         </div>
         <p class="muted" id="room-wait" hidden data-i18n="room.wait">Ждём, пока организатор нажмёт «Подобрать»…</p>
         <div id="room-result"></div>
+      </div>
+    </section>
+
+    <!-- Search -->
+    <section id="screen-search" hidden>
+      <h1 data-i18n="search.title">Поиск</h1>
+      <p class="muted" data-i18n="search.hint">Найди любой фильм или сериал и отметь его.</p>
+      <form id="search-form" class="search-box" role="search">
+        <input type="search" name="q" autocomplete="off" data-i18n-placeholder="search.ph" placeholder="Название фильма или сериала…">
+      </form>
+      <div id="search-results" class="search-grid"></div>
+      <div id="search-detail" hidden>
+        <button class="link" id="search-back" data-i18n="search.back">← К результатам</button>
+        <div id="search-card"></div>
       </div>
     </section>
 
@@ -297,7 +329,14 @@
         <p class="muted" data-i18n="fr.myCode">Твой код друга</p>
         <p class="friend-code" id="my-friend-code"></p>
         <p class="muted small" data-i18n="fr.codeHint">Дай этот код другу.</p>
-        <button class="secondary" id="share-friend-code" data-i18n="fr.share">Поделиться ссылкой</button>
+        <div class="actions">
+          <button class="secondary" id="share-friend-code" data-i18n="fr.share">Поделиться ссылкой</button>
+          <button class="secondary" id="friend-qr-btn" data-i18n="fr.qr">📱 QR-код</button>
+        </div>
+        <div class="qr-box" id="friend-qr" hidden>
+          <img alt="QR">
+          <p class="muted small" data-i18n="fr.qrHint">Друг наводит камеру телефона на код.</p>
+        </div>
         <p class="error" id="nickname-error"></p>
       </div>
 
@@ -309,6 +348,11 @@
         </div>
         <p class="error" id="add-friend-msg"></p>
       </form>
+
+      <div id="friend-requests-wrap" hidden>
+        <h2 class="small-heading" data-i18n="fr.requests">Запросы в друзья</h2>
+        <div id="friend-requests" class="card list"></div>
+      </div>
 
       <h2 class="small-heading" data-i18n="fr.recs">Тебе советуют</h2>
       <div id="friend-recs" class="card list"></div>
@@ -347,6 +391,8 @@
     <p><button class="link open-privacy footer-link" data-i18n="footer.privacy">Конфиденциальность</button></p>
     <p data-i18n-html="footer">Данные о фильмах — <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">TMDB</a>, где посмотреть — <a href="https://www.justwatch.com/" target="_blank" rel="noopener">JustWatch</a>. Этот сайт использует TMDB API, но не одобрен и не сертифицирован TMDB.</p>
   </footer>
+
+  <div class="toast" id="toast" hidden><span id="toast-text"></span><button class="link" id="toast-undo"></button></div>
 
   <script src="/i18n.js"></script>
   <script src="/app.js"></script>

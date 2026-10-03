@@ -175,15 +175,31 @@ export async function saveFeedback(env, userId, movieId, rating) {
   ]);
 }
 
-// { genre: sum of 👍(+1)/👎(-1) } — what the recommender learns from.
-export async function getTaste(env, userId) {
-  const { results } = await env.DB.prepare("SELECT rating, genres FROM ratings WHERE user_id = ?")
-    .bind(userId)
-    .all()
-    .catch(() => ({ results: [] })); // table missing until schema.sql is re-run
-  const taste = {};
-  for (const r of results) for (const g of JSON.parse(r.genres || "[]")) taste[g] = (taste[g] || 0) + r.rating;
-  return taste;
+// 👍 / 👎 set directly (from search or "My list"), without the "how was it?" question.
+// rating 0 removes the rating. Rating something also marks it as seen.
+export async function setRating(env, userId, movieId, rating, genreIds) {
+  if (!isKnownId(movieId) || ![1, -1, 0].includes(rating)) throw new HttpError(400, "err.badRequest");
+  if (rating === 0) {
+    await env.DB.prepare("DELETE FROM ratings WHERE user_id = ? AND movie_id = ?").bind(userId, movieId).run();
+    return;
+  }
+  const genres = genreIds || (await infoFor(env, [movieId], "ru"))[movieId]?.genreIds || [];
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO ratings (user_id, movie_id, rating, genres, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, movie_id) DO UPDATE SET rating = excluded.rating, genres = excluded.genres, created_at = excluded.created_at`,
+    ).bind(userId, movieId, rating, JSON.stringify(genres), Date.now()),
+    env.DB.prepare(
+      `INSERT INTO user_movies (user_id, movie_id, status, created_at) VALUES (?, ?, 'seen', ?)
+       ON CONFLICT(user_id, movie_id) DO UPDATE SET status = 'seen'`,
+    ).bind(userId, movieId, Date.now()),
+  ]);
+}
+
+// Remove (or move) many titles at once — "delete selected" / "clear" in My list.
+export async function bulkMark(env, userId, movieIds, status) {
+  if (!Array.isArray(movieIds)) throw new HttpError(400, "err.badRequest");
+  for (const id of movieIds.slice(0, 300)) await setMark(env, userId, id, status ?? null);
 }
 
 // ---------- Stats page (admin only) ----------

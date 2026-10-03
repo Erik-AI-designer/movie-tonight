@@ -1,12 +1,14 @@
 import { register, login, logout, resetPassword, newRecoveryCode, getUser, limit, HttpError } from "./auth.js";
 import { saveProfile, validateProfile } from "./profile.js";
 import { checkAnswers, criteriaFor, trialCriteria, pickAny } from "./recommend.js";
-import { getMarks, setMark, getList, getTaste, recordClick, pendingFeedback, saveFeedback, isAdmin, stats } from "./lists.js";
-import { createRoom, roomState, joinRoom, pickForRoom, voteInRoom, finishVote } from "./rooms.js";
+import { getMarks, setMark, getList, recordClick, pendingFeedback, saveFeedback, setRating, bulkMark, isAdmin, stats } from "./lists.js";
+import { computeTaste, tasteSummary } from "./taste.js";
+import { search, titleCard } from "./search.js";
+import { createRoom, roomState, joinRoom, pickForRoom, voteInRoom, finishVote, vetoInRoom, setRoomTime, befriendInRoom } from "./rooms.js";
 import { langOf, t } from "./i18n.js";
 import {
   setNickname, addFriend, removeFriend, friendsPage, friendNames,
-  recommendToFriend, dismissRecommendation, newRecommendationCount,
+  recommendToFriend, dismissRecommendation, newRecommendationCount, answerRequest,
 } from "./friends.js";
 import { recap, exportData, deleteAccount } from "./account.js";
 
@@ -113,13 +115,36 @@ async function route(request, env, url, lang) {
     const answers = checkAnswers(body);
     const shown = Array.isArray(body.exclude) ? body.exclude.slice(0, 100) : [];
     const marks = await getMarks(env, user.id);
-    const criteria = criteriaFor(user.profile, answers, marks, await getTaste(env, user.id), lang, shown);
+    const taste = await computeTaste(env, user.id);
+    const criteria = criteriaFor(user.profile, answers, marks, taste.genres, lang, shown);
+    criteria.seeds = taste.seeds; // "because you liked …"
     const [result] = await pickAny(env, criteria, 1);
     return json({ ...result, saved: marks.saved.has(result.id) });
   }
 
   if (pathname === "/api/list" && method === "GET") {
     return json(await getList(env, user.id, lang));
+  }
+
+  if (pathname === "/api/list/bulk" && method === "POST") {
+    const { movieIds, status } = await readBody(request);
+    await bulkMark(env, user.id, movieIds, status);
+    return json({ ok: true });
+  }
+
+  // ---------- 🧠 Taste and 🔍 search ----------
+  if (pathname === "/api/taste" && method === "GET") return json(await tasteSummary(env, user.id));
+  if (pathname === "/api/search" && method === "GET") {
+    return json({ results: await search(env, url.searchParams.get("q"), lang) });
+  }
+  const titleMatch = pathname.match(/^\/api\/title\/([a-z0-9-]{1,40})$/);
+  if (titleMatch && method === "GET") return json(await titleCard(env, user, titleMatch[1], lang));
+  if (pathname === "/api/rate" && method === "POST") {
+    const { movieId, rating } = await readBody(request);
+    // Make sure we know the genres (titleCard caches TMDB details), so the rating teaches the taste.
+    const card = rating ? await titleCard(env, user, movieId, lang).catch(() => null) : null;
+    await setRating(env, user.id, movieId, rating, card?.genreIds);
+    return json({ ok: true });
   }
 
   if (pathname === "/api/list" && method === "POST") {
@@ -154,6 +179,7 @@ async function route(request, env, url, lang) {
     else if (action === "remove") await removeFriend(env, user.id, body.code);
     else if (action === "recommend") await recommendToFriend(env, user.id, body.code, body.movieId);
     else if (action === "dismiss") await dismissRecommendation(env, user.id, body.id);
+    else if (action === "answer") await answerRequest(env, user.id, body.id, body.accept === true);
     else throw new HttpError(404, "err.notFound");
     return json({ ok: true });
   }
@@ -179,7 +205,7 @@ async function route(request, env, url, lang) {
     return json(await createRoom(env, user));
   }
 
-  const roomMatch = pathname.match(/^\/api\/rooms\/([A-Za-z0-9]{6})(\/join|\/pick|\/vote|\/finish)?$/);
+  const roomMatch = pathname.match(/^\/api\/rooms\/([A-Za-z0-9]{6})(\/join|\/pick|\/vote|\/finish|\/veto|\/time|\/befriend)?$/);
   if (roomMatch) {
     const [, code, action] = roomMatch;
     if (!action && method === "GET") return json(await roomState(env, user, code));
@@ -189,6 +215,9 @@ async function route(request, env, url, lang) {
       if (action === "/pick") return json(await pickForRoom(env, user, code, body, lang));
       if (action === "/vote") return json(await voteInRoom(env, user, code, body.index));
       if (action === "/finish") return json(await finishVote(env, user, code));
+      if (action === "/veto") return json(await vetoInRoom(env, user, code, body.index));
+      if (action === "/time") return json(await setRoomTime(env, user, code, body.time));
+      if (action === "/befriend") return json(await befriendInRoom(env, user, code, body.ref));
     }
   }
 

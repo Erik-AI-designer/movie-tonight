@@ -112,3 +112,18 @@ CREATE TABLE IF NOT EXISTS recommendations (
 );
 
 CREATE INDEX IF NOT EXISTS recommendations_to ON recommendations(to_id, dismissed);
+
+-- Friend requests (e.g. "➕ add as friend" from a movie-night room). Accepting makes a friendship.
+CREATE TABLE IF NOT EXISTS friend_requests (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  from_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  to_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  UNIQUE (from_id, to_id)
+);
+
+-- Extra room settings: the time the organiser picked ("we watch at 20:30").
+CREATE TABLE IF NOT EXISTS room_meta (
+  code       TEXT PRIMARY KEY REFERENCES rooms(code) ON DELETE CASCADE,
+  start_time TEXT
+);

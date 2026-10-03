@@ -11,7 +11,8 @@ Russian-language services · movie, series or either · 🎲 surprise me · "see
 👍/👎 after watching (the picks learn from it) · posters, logos, facts and official trailers from TMDB ·
 movie night with friends (3 options + voting) · share a picture of the pick · RU / EE / EN · light & dark theme ·
 📊 click stats for the admin · 🤝 friends (friend codes, their 👍, recommend a movie) · 📅 monthly recap with a share
-picture · 🎲 one free pick without an account · privacy page, download my data, delete my account ·
+picture · 🧠 taste learned from everything you mark (+ “similar to what you liked”) · 🔍 search any title
+and rate it yourself · friend requests + QR codes · rooms with names, moods, veto and a start time · 🎲 one free pick without an account · privacy page, download my data, delete my account ·
 installable on phones (PWA) · login rate limiting · recovery codes.
 
 ## Files
@@ -30,7 +31,9 @@ movie-tonight/
 │   ├── lists.js        seen / not for me / my list, 👍/👎, click stats
 │   ├── tmdb.js         posters, descriptions, trailers, Estonian availability (cached a week)
 │   ├── rooms.js        movie night with friends (3 options + voting)
-│   ├── friends.js      friend codes, nicknames, friends' 👍, recommendations
+│   ├── friends.js      friend codes, requests, nicknames, friends' 👍, recommendations
+│   ├── taste.js        learns your taste from 👍/👎, saved, seen, hidden
+│   ├── search.js       search TMDB, title card with your marks
 │   ├── account.js      monthly recap, download my data, delete my account
 │   └── movies.js       THE CATALOGUE: movies, series, moods, genres, services
 └── public/             frontend: what the browser loads
