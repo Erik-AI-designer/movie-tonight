@@ -5,12 +5,31 @@ import { MOVIES, MOODS, DURATIONS, GENRES, SERVICES, LIGHT_MOODS, DEEP_MOODS } f
 
 function watchLink(env, serviceId, movie) {
   const service = SERVICES[serviceId];
-  let url = service.url.replace("{q}", encodeURIComponent(movie.original));
+  let url = service.url
+    .replace("{q}", encodeURIComponent(movie.original))
+    .replace("{ru}", encodeURIComponent(movie.title));
   const tag = service.tagVar && env[service.tagVar];
   if (tag) {
     url += (url.includes("?") ? "&" : "?") + `${service.tagParam}=${encodeURIComponent(tag)}`;
   }
   return { service: service.name, url, affiliate: Boolean(tag) };
+}
+
+// For movies that aren't on any of your services: JustWatch shows where to watch it in Estonia.
+function justWatchLink(movie) {
+  return {
+    service: "JustWatch",
+    label: "Где посмотреть",
+    url: `https://www.justwatch.com/ee/search?q=${encodeURIComponent(movie.original)}`,
+    affiliate: false,
+  };
+}
+
+// Which of the user's services can show this movie: ones that have it, plus rental stores.
+function servicesFor(movie, services) {
+  return services.filter(
+    (s) => movie.services.includes(s) || (SERVICES[s].rental && !movie.noRental),
+  );
 }
 
 function score(movie, profile, mood) {
@@ -51,21 +70,26 @@ export function recommend(env, profile, body) {
   const maxAge = AGE_GROUPS[profile.ageGroup] ?? 6;
   const maxRuntime = DURATIONS[durationKey].max;
 
-  // Hard rules: age, available on one of your services, not a disliked genre, not already shown.
-  const allowed = MOVIES.filter(
+  // Hard rules: age, not a disliked genre, not already shown.
+  const suitable = MOVIES.filter(
     (m) =>
       m.minAge <= maxAge &&
-      m.services.some((s) => services.includes(s)) &&
       !m.genres.some((g) => profile.dislikedGenres.includes(g)) &&
       !exclude.has(m.id),
   );
+  const onMine = suitable.filter((m) => servicesFor(m, services).length > 0);
 
-  // Prefer: right mood AND fits the time. Then relax time, then relax mood.
+  // Prefer your services, then the right mood, then fitting the time.
+  // If nothing on your services fits the mood, suggest a movie from elsewhere.
+  const fitsMood = (m) => m.moods.includes(mood);
+  const fitsTime = (m) => m.runtime <= maxRuntime;
   const candidates =
     [
-      allowed.filter((m) => m.moods.includes(mood) && m.runtime <= maxRuntime),
-      allowed.filter((m) => m.moods.includes(mood)),
-      allowed.filter((m) => m.runtime <= maxRuntime),
+      onMine.filter((m) => fitsMood(m) && fitsTime(m)),
+      onMine.filter(fitsMood),
+      suitable.filter((m) => fitsMood(m) && fitsTime(m)),
+      suitable.filter(fitsMood),
+      onMine.filter(fitsTime),
     ].find((list) => list.length > 0) || [];
 
   if (candidates.length === 0) {
@@ -77,6 +101,7 @@ export function recommend(env, profile, body) {
     .map((m) => ({ m, s: score(m, profile, mood) + Math.random() }))
     .sort((a, b) => b.s - a.s);
   const movie = ranked[Math.floor(Math.random() * Math.min(3, ranked.length))].m;
+  const myServices = servicesFor(movie, services);
 
   return {
     id: movie.id,
@@ -87,6 +112,7 @@ export function recommend(env, profile, body) {
     minAge: movie.minAge,
     genres: movie.genres.map((g) => GENRES[g]),
     reason: explain(movie, profile, mood, maxRuntime),
-    links: movie.services.filter((s) => services.includes(s)).map((s) => watchLink(env, s, movie)),
+    elsewhere: myServices.length === 0,
+    links: myServices.length > 0 ? myServices.map((s) => watchLink(env, s, movie)) : [justWatchLink(movie)],
   };
 }
