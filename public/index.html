@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Что посмотреть сегодня</title>
+  <meta name="description" content="Выбери настроение, время и свои стриминги — получи один фильм на вечер.">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <span class="logo">🍿 Что посмотреть сегодня</span>
+    <nav id="nav" hidden>
+      <button class="link" id="edit-profile">Мои ответы</button>
+      <button class="link" id="logout">Выйти</button>
+    </nav>
+  </header>
+
+  <main>
+    <p id="loading" class="muted">Загрузка…</p>
+
+    <!-- 1. Login / register -->
+    <section id="screen-auth" hidden>
+      <h1>Один фильм на вечер.<br>Без часа листания.</h1>
+      <p class="muted">Войди, чтобы получить подборку — мы зададим пару вопросов о твоих вкусах.</p>
+      <div class="tabs">
+        <button class="tab active" data-mode="login">Вход</button>
+        <button class="tab" data-mode="register">Регистрация</button>
+      </div>
+      <form id="auth-form" class="card">
+        <label>Email <input type="email" name="email" autocomplete="email" required></label>
+        <label>Пароль <input type="password" name="password" minlength="8" autocomplete="current-password" required></label>
+        <button type="submit" class="primary" id="auth-submit">Войти</button>
+        <p class="error" id="auth-error"></p>
+      </form>
+    </section>
+
+    <!-- 2. Onboarding questions -->
+    <section id="screen-onboarding" hidden>
+      <h1>Пара вопросов о тебе</h1>
+      <form id="profile-form" class="card">
+        <fieldset>
+          <legend>Сколько тебе лет?</legend>
+          <div class="chips" data-name="ageGroup" data-type="radio"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Что ты любишь смотреть?</legend>
+          <div class="chips" data-name="favoriteGenres" data-type="checkbox"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Что точно <b>не</b> показывать?</legend>
+          <div class="chips" data-name="dislikedGenres" data-type="checkbox"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Обычно хочется чего-то…</legend>
+          <div class="chips" data-name="vibe" data-type="radio"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Какие сервисы у тебя есть?</legend>
+          <div class="chips" data-name="services" data-type="checkbox"></div>
+        </fieldset>
+        <button type="submit" class="primary">Готово</button>
+        <p class="error" id="profile-error"></p>
+      </form>
+    </section>
+
+    <!-- 3. Picker + result -->
+    <section id="screen-picker" hidden>
+      <h1>Что сегодня вечером?</h1>
+      <form id="pick-form" class="card">
+        <fieldset>
+          <legend>Настроение</legend>
+          <div class="chips" data-name="mood" data-type="radio"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Сколько есть времени</legend>
+          <div class="chips" data-name="duration" data-type="radio"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Мои сервисы</legend>
+          <div class="chips" data-name="services" data-type="checkbox"></div>
+        </fieldset>
+        <button type="submit" class="primary">Подобрать фильм</button>
+        <p class="error" id="pick-error"></p>
+      </form>
+
+      <article id="result" class="card result" hidden>
+        <p class="eyebrow">Сегодня смотрим</p>
+        <h2 id="r-title"></h2>
+        <p class="muted" id="r-meta"></p>
+        <p id="r-reason"></p>
+        <div id="r-links" class="links"></div>
+        <button class="secondary" id="another">Другой вариант</button>
+        <p class="disclosure">Некоторые ссылки — партнёрские: если ты оформишь подписку или купишь фильм, мы можем получить небольшую комиссию. Для тебя цена не меняется.</p>
+      </article>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
