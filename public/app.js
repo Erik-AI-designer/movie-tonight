@@ -7,7 +7,6 @@ const OPTIONS = {
     mystery: "детектив", family: "семейное",
   },
   vibe: { light: "лёгкого", deep: "серьёзного", both: "по-разному" },
-  services: { netflix: "Netflix", prime: "Prime Video", disney: "Disney+", apple: "Apple TV+", hbo: "HBO Max" },
   mood: {
     cozy: "🛋 уютное", funny: "😂 посмеяться", thrilling: "😱 пощекотать нервы",
     thoughtful: "🤔 подумать", romantic: "💞 романтика", epic: "🚀 приключение",
@@ -15,8 +14,30 @@ const OPTIONS = {
   duration: { short: "до 1 ч 45 мин", normal: "до 2 ч 15 мин", long: "сколько угодно" },
 };
 
+// Streaming services, grouped. Ids must match SERVICES in src/movies.js.
+const SERVICE_GROUPS = [
+  [
+    "Подписки",
+    {
+      netflix: "Netflix", prime: "Prime Video", disney: "Disney+", apple: "Apple TV+", hbo: "HBO Max",
+      skyshowtime: "SkyShowtime", viaplay: "Viaplay", paramount: "Paramount+", mubi: "MUBI", crunchyroll: "Crunchyroll",
+    },
+  ],
+  ["Эстония", { go3: "Go3", elisa: "Elisa Elamus", telia: "Telia TV", jupiter: "ERR Jupiter" }],
+  [
+    "Русскоязычные",
+    {
+      kinopoisk: "Кинопоиск", okko: "Okko", ivi: "Иви", start: "Start", premier: "Premier",
+      wink: "Wink", kion: "KION", amediateka: "Амедиатека",
+    },
+  ],
+  ["Аренда и покупка фильмов", { apple_rent: "Apple TV (аренда)", google: "Google TV / YouTube" }],
+];
+const ALL_SERVICES = Object.assign({}, ...SERVICE_GROUPS.map(([, services]) => services));
+
 const $ = (sel) => document.querySelector(sel);
 let me = null;
+let lastPick = null;
 let shown = [];
 
 async function api(path, body) {
@@ -41,10 +62,9 @@ function show(screen) {
   $("#nav").hidden = screen === "auth";
 }
 
-// Fill a .chips container with radio/checkbox chips.
-function renderChips(container, options, selected = []) {
+// Add radio/checkbox chips to a .chips container.
+function addChips(container, options, selected) {
   const { name, type } = container.dataset;
-  container.replaceChildren();
   for (const [value, label] of Object.entries(options)) {
     const wrap = document.createElement("label");
     wrap.className = "chip";
@@ -57,6 +77,24 @@ function renderChips(container, options, selected = []) {
     span.textContent = label;
     wrap.append(input, span);
     container.append(wrap);
+  }
+}
+
+function renderChips(container, options, selected = []) {
+  container.replaceChildren();
+  addChips(container, options, selected);
+}
+
+// All services, with a small heading above each group.
+function renderServiceGroups(container, selected = []) {
+  container.replaceChildren();
+  for (const [heading, services] of SERVICE_GROUPS) {
+    const title = document.createElement("p");
+    title.className = "muted";
+    title.style.cssText = "flex-basis: 100%; margin: 8px 0 0; font-size: 0.85rem;";
+    title.textContent = heading;
+    container.append(title);
+    addChips(container, services, selected);
   }
 }
 
@@ -109,7 +147,7 @@ function openOnboarding() {
   renderChips(form.querySelector('[data-name="favoriteGenres"]'), OPTIONS.genres, p.favoriteGenres || []);
   renderChips(form.querySelector('[data-name="dislikedGenres"]'), OPTIONS.genres, p.dislikedGenres || []);
   renderChips(form.querySelector('[data-name="vibe"]'), OPTIONS.vibe, [p.vibe || "both"]);
-  renderChips(form.querySelector('[data-name="services"]'), OPTIONS.services, p.services || []);
+  renderServiceGroups(form.querySelector('[data-name="services"]'), p.services || []);
   $("#profile-error").textContent = "";
   show("onboarding");
 }
@@ -132,7 +170,14 @@ function openPicker() {
   const form = $("#pick-form");
   renderChips(form.querySelector('[data-name="mood"]'), OPTIONS.mood, []);
   renderChips(form.querySelector('[data-name="duration"]'), OPTIONS.duration, ["normal"]);
-  renderChips(form.querySelector('[data-name="services"]'), OPTIONS.services, me.profile.services || []);
+  // Only show the services the user said they have (all of them if they picked none).
+  const mine = (me.profile.services || []).filter((id) => id in ALL_SERVICES);
+  const services = form.querySelector('[data-name="services"]');
+  if (mine.length) {
+    renderChips(services, Object.fromEntries(mine.map((id) => [id, ALL_SERVICES[id]])), mine);
+  } else {
+    renderServiceGroups(services);
+  }
   $("#result").hidden = true;
   show("picker");
 }
@@ -143,6 +188,7 @@ async function pick(fresh) {
   try {
     const movie = await api("/api/recommend", { ...readForm($("#pick-form")), exclude: shown });
     shown.push(movie.id);
+    lastPick = movie;
     renderResult(movie);
   } catch (err) {
     if (err.status === 401) return show("auth");
@@ -154,7 +200,9 @@ async function pick(fresh) {
 function renderResult(m) {
   $("#r-title").textContent = m.title;
   $("#r-meta").textContent = `${m.original} · ${m.year} · ${m.runtime} мин · ${m.minAge}+ · ${m.genres.join(", ")}`;
-  $("#r-reason").textContent = m.reason;
+  $("#r-reason").textContent = m.elsewhere
+    ? `${m.reason} На твоих сервисах подходящего не нашлось — вот где этот фильм можно найти.`
+    : m.reason;
   const links = $("#r-links");
   links.replaceChildren();
   for (const l of m.links) {
@@ -163,7 +211,7 @@ function renderResult(m) {
     a.href = l.url;
     a.target = "_blank";
     a.rel = l.affiliate ? "sponsored noopener" : "noopener";
-    a.textContent = `Смотреть на ${l.service}`;
+    a.textContent = l.label || `Смотреть на ${l.service}`;
     links.append(a);
   }
   $("#result").hidden = false;
