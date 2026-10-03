@@ -154,7 +154,13 @@ function resultCard(m, actions = {}) {
       textContent: l.label || `Смотреть на ${l.service}`,
     }));
   }
-  links.append(el("a", { className: "secondary button", href: m.trailer, target: "_blank", rel: "noopener", textContent: "▶ Трейлер" }));
+  if (m.trailerVideo) {
+    const play = el("button", { className: "secondary", textContent: "▶ Трейлер" });
+    play.addEventListener("click", () => openTrailer(m));
+    links.append(play);
+  } else {
+    links.append(el("a", { className: "secondary button", href: m.trailer, target: "_blank", rel: "noopener", textContent: "▶ Трейлер" }));
+  }
 
   const where = m.whereEE && (m.whereEE.stream.length || m.whereEE.rent.length)
     ? el("p", { className: "muted small" }, [
@@ -187,9 +193,13 @@ function resultCard(m, actions = {}) {
 
   const body = el("div", { className: "result-body" },
     el("p", { className: "eyebrow", textContent: m.groupSize ? `Смотрим вместе · ${m.groupSize} чел.` : isSeries ? "Сериал на вечер" : "Сегодня смотрим" }),
+    m.logo ? el("img", { className: "title-logo", src: m.logo, alt: "", loading: "lazy" }) : null,
     el("h2", { textContent: m.title }),
     el("p", { className: "muted", textContent: meta }),
+    m.tagline ? el("p", { className: "tagline", textContent: `«${m.tagline}»` }) : null,
     m.overview ? el("p", { className: "overview", textContent: m.overview }) : null,
+    factsList(m),
+    m.tmdbUrl ? el("a", { className: "tmdb-link", href: m.tmdbUrl, target: "_blank", rel: "noopener", textContent: "Подробнее на TMDB →" }) : null,
     el("p", { textContent: reason }),
     where,
     links,
@@ -202,6 +212,85 @@ function resultCard(m, actions = {}) {
     body,
   );
   return card;
+}
+
+// "About the film" facts from TMDB: release date, language, country, director, cast, seasons.
+function nameOf(type, code) {
+  try {
+    return new Intl.DisplayNames(["ru"], { type }).of(type === "region" ? code.toUpperCase() : code);
+  } catch {
+    return code;
+  }
+}
+
+// 1 серия, 2 серии, 5 серий.
+function plural(n, one, few, many) {
+  const d = n % 10, dd = n % 100;
+  if (d === 1 && dd !== 11) return one;
+  if (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) return few;
+  return many;
+}
+
+function factsList(m) {
+  const f = m.facts;
+  if (!f) return null;
+  const isSeries = m.type === "series";
+  const date = f.released
+    ? new Date(f.released).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+  const rows = [
+    [isSeries ? "Первая серия" : "Дата выхода", date],
+    ["Язык оригинала", f.language ? nameOf("language", f.language) : null],
+    [f.countries.length > 1 ? "Страны" : "Страна", f.countries.map((c) => nameOf("region", c)).join(", ")],
+    [isSeries ? "Создатели" : f.directors.length > 1 ? "Режиссёры" : "Режиссёр", f.directors.join(", ")],
+    ["В ролях", f.cast.join(", ")],
+    ["Сезонов", f.seasons ? `${f.seasons}${f.episodes ? ` (${f.episodes} ${plural(f.episodes, "серия", "серии", "серий")})` : ""}` : null],
+  ].filter(([, value]) => value);
+  if (!rows.length) return null;
+  return el("dl", { className: "facts" }, ...rows.flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: v })]));
+}
+
+// Official trailer (chosen from TMDB data) played in a window on our page.
+let trailerModal = null;
+
+function openTrailer(m) {
+  if (!trailerModal) {
+    const frame = el("div", { className: "video" });
+    const caption = el("p", { className: "muted small" });
+    const close = el("button", { className: "link modal-close", textContent: "✕", ariaLabel: "Закрыть" });
+    const box = el("div", { className: "modal-box", role: "dialog", ariaModal: "true" }, close, frame, caption);
+    const backdrop = el("div", { className: "modal", hidden: true }, box);
+    const hide = () => {
+      backdrop.hidden = true;
+      frame.replaceChildren(); // stops the video
+    };
+    close.addEventListener("click", hide);
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) hide();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !backdrop.hidden) hide();
+    });
+    document.body.append(backdrop);
+    trailerModal = { backdrop, frame, caption };
+  }
+
+  const v = m.trailerVideo;
+  trailerModal.frame.replaceChildren(el("iframe", {
+    src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.key)}?autoplay=1&rel=0&modestbranding=1`,
+    title: `Трейлер: ${m.title}`,
+    allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
+    allowFullscreen: true,
+  }));
+  trailerModal.caption.replaceChildren(
+    [v.official ? "Официальный трейлер" : "Трейлер", v.name]
+      .filter((x, i, all) => x && all.findIndex((y) => y?.toLowerCase() === x.toLowerCase()) === i)
+      .join(" · ") + " · ",
+    m.tmdbUrl
+      ? el("a", { href: `${m.tmdbUrl}/videos`, target: "_blank", rel: "noopener", textContent: "все видео на TMDB" })
+      : "",
+  );
+  trailerModal.backdrop.hidden = false;
 }
 
 function button(text, onClick) {

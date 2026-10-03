@@ -5,6 +5,7 @@ import { SERVICES } from "./movies.js";
 import { MOVIES_BY_ID, watchLink } from "./recommend.js";
 
 const CACHE_MS = 7 * 86400_000;
+const CACHE_VERSION = 2; // bump when fetchFromTmdb returns new fields, so old cache entries refresh
 const COUNTRY = "EE";
 
 // TMDB/JustWatch provider names that differ from our service names.
@@ -48,21 +49,40 @@ async function fetchFromTmdb(env, movie) {
 
   const d = await tmdb(
     env,
-    `/${kind}/${hit.id}?language=ru-RU&append_to_response=videos,watch/providers&include_video_language=ru,en`,
+    `/${kind}/${hit.id}?language=ru-RU&append_to_response=videos,images,credits,watch/providers` +
+      "&include_video_language=ru,en&include_image_language=ru,en,null",
   );
   let overview = d.overview;
   if (!overview) overview = (await tmdb(env, `/${kind}/${hit.id}?language=en-US`)).overview;
 
-  const videos = (d.videos?.results || []).filter((v) => v.site === "YouTube");
-  const trailer = videos.find((v) => v.type === "Trailer") || videos[0];
   const where = d["watch/providers"]?.results?.[COUNTRY];
+  const trailer = pickTrailer(d.videos?.results || []);
+  const logo = pickLogo(d.images?.logos || []);
+  const crew = d.credits?.crew || [];
+  const directors = kind === "tv"
+    ? (d.created_by || []).map((p) => p.name)
+    : crew.filter((p) => p.job === "Director").map((p) => p.name);
 
   return {
+    v: CACHE_VERSION,
     tmdbId: hit.id,
+    tmdbUrl: `https://www.themoviedb.org/${kind}/${hit.id}`,
     poster: d.poster_path ? `https://image.tmdb.org/t/p/w342${d.poster_path}` : null,
+    logo: logo ? `https://image.tmdb.org/t/p/w500${logo.file_path}` : null,
     overview: overview || null,
+    tagline: d.tagline || null,
     rating: d.vote_count > 20 ? Math.round(d.vote_average * 10) / 10 : null,
-    trailer: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : null,
+    // Facts for the "about" block. Language/country are codes; the page turns them into Russian names.
+    facts: {
+      released: (kind === "tv" ? d.first_air_date : d.release_date) || null,
+      language: d.original_language || null,
+      countries: kind === "tv" ? d.origin_country || [] : (d.production_countries || []).map((c) => c.iso_3166_1),
+      directors: directors.slice(0, 2),
+      cast: (d.credits?.cast || []).slice(0, 4).map((p) => p.name),
+      seasons: kind === "tv" ? d.number_of_seasons || null : null,
+      episodes: kind === "tv" ? d.number_of_episodes || null : null,
+    },
+    trailer: trailer ? { key: trailer.key, name: trailer.name, official: Boolean(trailer.official) } : null,
     providers: where
       ? {
           stream: (where.flatrate || []).map((p) => p.provider_name),
@@ -72,12 +92,31 @@ async function fetchFromTmdb(env, movie) {
   };
 }
 
+// The best trailer: official ones first, Russian before English, newest first.
+function pickTrailer(videos) {
+  const rank = (v) => (v.official ? 4 : 0) + (v.type === "Trailer" ? 2 : 0) + (v.iso_639_1 === "ru" ? 1 : 0);
+  return videos
+    .filter((v) => v.site === "YouTube" && ["Trailer", "Teaser"].includes(v.type))
+    .sort((a, b) => rank(b) - rank(a) || String(b.published_at).localeCompare(String(a.published_at)))[0];
+}
+
+// The title logo (a picture of the film's name): Russian if there is one, else English, else any.
+function pickLogo(logos) {
+  const order = { ru: 0, en: 1 };
+  return [...logos]
+    .filter((l) => l.file_path && !l.file_path.endsWith(".svg"))
+    .sort((a, b) => (order[a.iso_639_1] ?? 2) - (order[b.iso_639_1] ?? 2) || (b.vote_average || 0) - (a.vote_average || 0))[0];
+}
+
 // Cached TMDB data for one catalogue entry, or null if TMDB isn't set up / fails.
 export async function tmdbData(env, movie) {
   if (!env.TMDB_TOKEN) return null;
   try {
     const row = await env.DB.prepare("SELECT data, fetched_at FROM tmdb_cache WHERE movie_id = ?").bind(movie.id).first();
-    if (row && Date.now() - row.fetched_at < CACHE_MS) return JSON.parse(row.data);
+    if (row && Date.now() - row.fetched_at < CACHE_MS) {
+      const cached = JSON.parse(row.data);
+      if (cached.v === CACHE_VERSION || cached.notFound) return cached;
+    }
 
     const data = await fetchFromTmdb(env, movie);
     await env.DB.prepare(
@@ -99,8 +138,18 @@ export async function withTmdb(env, result, services) {
   const t = await tmdbData(env, movie);
   if (!t || t.notFound) return result;
 
-  const out = { ...result, poster: t.poster, overview: t.overview, rating: t.rating };
-  if (t.trailer) out.trailer = t.trailer;
+  const out = {
+    ...result,
+    poster: t.poster,
+    logo: t.logo,
+    overview: t.overview,
+    tagline: t.tagline,
+    rating: t.rating,
+    facts: t.facts,
+    tmdbUrl: t.tmdbUrl,
+  };
+  // Official trailer, played on our page; the plain trailer link stays as a fallback.
+  if (t.trailer) out.trailerVideo = t.trailer;
 
   if (t.providers) {
     out.whereEE = t.providers;

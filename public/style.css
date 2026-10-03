@@ -183,3 +183,27 @@ input[type="text"] {
 .members { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 6px; }
 .members li { color: var(--muted); }
 .members li.ready { color: var(--text); }
+
+/* ---------- TMDB extras: logo, tagline, facts, trailer window ---------- */
+.title-logo {
+  display: block;
+  max-width: min(280px, 100%);
+  max-height: 90px;
+  object-fit: contain;
+  object-position: left;
+  margin: 8px 0 4px;
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.5)); /* keeps dark logos visible */
+}
+.tagline { font-style: italic; color: var(--muted); margin: 4px 0; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 12px 0; font-size: 0.9rem; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.tmdb-link { display: inline-block; color: var(--accent); font-size: 0.9rem; margin-bottom: 4px; }
+
+.modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.modal-box { width: min(960px, 100%); background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px; position: relative; }
+.modal-close { position: absolute; top: -40px; right: 0; color: var(--text); font-size: 1.4rem; }
+.video { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.modal .small { margin: 10px 4px 0; }
+.modal a { color: var(--accent); }
